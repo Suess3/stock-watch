@@ -175,6 +175,56 @@ def record_price(state: dict, symbol: str, price: float, now: datetime,
     return True
 
 
+BACKFILL_TRIES_KEY = "__backfill_tries"
+BACKFILL_MAX_TRIES = 5
+
+
+def backfill_history(state: dict, symbol: str, min_points: int = 24) -> bool:
+    """Traegt einmalig die letzte Woche stuendlich nach.
+
+    Sonst startet die Grafik bei null und braucht Tage, bis sie etwas zeigt.
+    Laeuft nur, solange zu wenige Punkte da sind, und gibt nach einigen
+    Fehlversuchen auf, damit kein Dauerabruf entsteht.
+    """
+    history = state.setdefault(HISTORY_KEY, {})
+    series = history.setdefault(symbol, [])
+    if len(series) >= min_points:
+        return False
+
+    tries = state.setdefault(BACKFILL_TRIES_KEY, {})
+    if tries.get(symbol, 0) >= BACKFILL_MAX_TRIES:
+        return False
+
+    try:
+        hist = yf.Ticker(symbol).history(period="7d", interval="60m")
+    except Exception as exc:
+        tries[symbol] = tries.get(symbol, 0) + 1
+        print(f"    -> Historie fuer {symbol} nicht abrufbar ({exc}).")
+        return True  # Zaehler hat sich geaendert, also speichern
+
+    points = []
+    if hist is not None and not hist.empty:
+        for ts, close in hist["Close"].dropna().items():
+            stamp = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=timezone.utc)
+            stamp = stamp.astimezone(timezone.utc)
+            points.append([stamp.isoformat(timespec="minutes"), round(float(close), 4)])
+
+    if not points:
+        tries[symbol] = tries.get(symbol, 0) + 1
+        print(f"    -> Keine Stundenwerte fuer {symbol} erhalten.")
+        return True
+
+    # Eigene Messwerte haben Vorrang vor den nachgetragenen.
+    merged = {p[0]: p for p in points}
+    merged.update({p[0]: p for p in series})
+    history[symbol] = [merged[k] for k in sorted(merged)][-HISTORY_MAX_POINTS:]
+    tries.pop(symbol, None)
+    print(f"    -> {len(points)} Stundenwerte der letzten Woche fuer {symbol} nachgetragen.")
+    return True
+
+
 def run_until_passed(cfg: dict, now: datetime) -> bool:
     """True, wenn das konfigurierte Enddatum ueberschritten ist."""
     raw = str(cfg.get("run_until") or "").strip()
@@ -280,6 +330,9 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
         except Exception as exc:
             print(f"[FEHLER] {name} ({symbol}): {exc}")
             continue
+
+        if backfill_history(state, symbol):
+            state_changed = True
 
         if record_price(state, symbol, price, now, history_gap):
             state_changed = True
