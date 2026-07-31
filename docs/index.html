@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ETF-Watcher — Konfigurator</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --panel: #f6f8fa;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #59636e;
+    --accent: #1f6feb;
+    --ok: #1a7f37;
+    --warn-bg: #fff8c5;
+    --warn-border: #d4a72c;
+    --warn-text: #4d2d00;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #9198a1;
+      --accent: #4493f8;
+      --ok: #3fb950;
+      --warn-bg: #272115;
+      --warn-border: #9e6a03;
+      --warn-text: #f2cc60;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1rem 4rem;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  .lede { color: var(--muted); margin: 0 0 1.5rem; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
+  @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
+  fieldset {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 0 0 1rem;
+    background: var(--panel);
+  }
+  legend { font-weight: 600; padding: 0 .4rem; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin: .6rem 0 .2rem; }
+  input, select {
+    width: 100%;
+    padding: .45rem .6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: .95rem;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+  .asset {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .75rem;
+    margin-bottom: .75rem;
+    background: var(--bg);
+  }
+  .asset-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+  .asset-head strong { font-size: .9rem; }
+  button {
+    font: inherit;
+    padding: .45rem .9rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.link { border: none; background: none; color: var(--accent); padding: .2rem .3rem; }
+  .out {
+    position: sticky; top: 1rem;
+  }
+  pre {
+    margin: 0;
+    padding: 1rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: .82rem;
+    overflow-x: auto;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .actions { display: flex; gap: .6rem; align-items: center; margin-top: .75rem; flex-wrap: wrap; }
+  .note {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    color: var(--warn-text);
+    border-radius: 6px;
+    padding: .7rem .9rem;
+    font-size: .85rem;
+    margin: 0 0 1rem;
+  }
+  .note code, .steps code { font-family: var(--mono); font-size: .95em; }
+  .steps { font-size: .88rem; color: var(--muted); padding-left: 1.2rem; }
+  .steps li { margin: .35rem 0; }
+  a { color: var(--accent); }
+  #copied { color: var(--ok); font-size: .85rem; opacity: 0; transition: opacity .15s; }
+  #copied.show { opacity: 1; }
+  .err { color: #cf222e; font-size: .85rem; }
+  @media (prefers-color-scheme: dark) { .err { color: #ff7b72; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ETF-Watcher — Konfigurator</h1>
+  <p class="lede">Werte eintragen, JSON kopieren, im GitHub-Editor einfügen.</p>
+
+  <div class="note">
+    <strong>Wichtig:</strong> Die Seite läuft nur in deinem Browser und kann nichts ins Repo schreiben —
+    den Commit machst du selbst. Die <strong>Mailadressen wirken nur lokal</strong>: bei GitHub Actions
+    überschreiben die Secrets <code>SMTP_USER</code> und <code>MAIL_TO</code> diese Felder.
+    Empfänger änderst du deshalb in den
+    <a href="https://github.com/Suess3/stock-watch/settings/secrets/actions">Repository-Secrets</a>.
+    Das Passwort steht nie in dieser Datei.
+  </div>
+
+  <div class="cols">
+    <div>
+      <fieldset>
+        <legend>Mail</legend>
+        <label for="mail">Adresse (Absender und Empfänger)</label>
+        <input id="mail" type="email" value="johannes.su3@gmail.com" placeholder="dein.name@gmail.com">
+        <div class="row">
+          <div>
+            <label for="host">SMTP-Server</label>
+            <input id="host" value="smtp.gmail.com">
+          </div>
+          <div>
+            <label for="port">Port</label>
+            <input id="port" type="number" value="465">
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Takt</legend>
+        <div class="row">
+          <div>
+            <label for="interval">Prüfintervall (Minuten)</label>
+            <input id="interval" type="number" min="1" value="10">
+          </div>
+          <div>
+            <label for="cooldown">Ruhezeit nach Alarm (Stunden)</label>
+            <input id="cooldown" type="number" min="0" step="0.5" value="12">
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Watchlist</legend>
+        <p style="margin:.2rem 0 .8rem;font-size:.85rem;color:var(--muted)">
+          Die Mail kommt, sobald der Kurs die Schwelle <strong>unterschreitet</strong>.
+        </p>
+        <div id="assets"></div>
+        <button type="button" id="add">+ Position hinzufügen</button>
+      </fieldset>
+    </div>
+
+    <div class="out">
+      <pre id="json">{}</pre>
+      <div class="actions">
+        <button type="button" class="primary" id="copy">config.json kopieren</button>
+        <a href="https://github.com/Suess3/stock-watch/edit/main/config.json" target="_blank" rel="noopener">
+          <button type="button">Im GitHub-Editor öffnen</button>
+        </a>
+        <span id="copied">kopiert</span>
+      </div>
+      <p id="error" class="err"></p>
+      <ol class="steps">
+        <li><code>config.json kopieren</code> klicken</li>
+        <li>Im GitHub-Editor alles markieren (<code>Strg/Cmd + A</code>) und einfügen</li>
+        <li>Grün <code>Commit changes…</code> → <code>Commit changes</code></li>
+        <li>Tab <a href="https://github.com/Suess3/stock-watch/actions/workflows/watcher.yml" target="_blank" rel="noopener">Actions</a>
+            → <code>Run workflow</code>, sonst läuft es von selbst alle 10 Minuten</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<script>
+const START = [
+  { name: "S&P 500", symbol: "^GSPC", threshold: 5000, currency: "USD" },
+  { name: "Vanguard FTSE All-World (VWCE)", symbol: "VWCE.DE", threshold: 100, currency: "EUR" }
+];
+const assetsEl = document.getElementById("assets");
+
+function addAsset(a = { name: "", symbol: "", threshold: "", currency: "EUR" }) {
+  const box = document.createElement("div");
+  box.className = "asset";
+  box.innerHTML = `
+    <div class="asset-head">
+      <strong>Position</strong>
+      <button type="button" class="link remove">entfernen</button>
+    </div>
+    <label>Bezeichnung</label>
+    <input class="a-name" value="${esc(a.name)}" placeholder="z.B. MSCI World">
+    <div class="row">
+      <div>
+        <label>Yahoo-Symbol</label>
+        <input class="a-symbol" value="${esc(a.symbol)}" placeholder="z.B. VWCE.DE">
+      </div>
+      <div>
+        <label>Währung</label>
+        <select class="a-currency">
+          ${["EUR","USD","GBP","CHF"].map(c =>
+            `<option value="${c}"${c === a.currency ? " selected" : ""}>${c}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+    <label>Schwelle (Alarm bei Unterschreitung)</label>
+    <input class="a-threshold" type="number" step="any" value="${esc(a.threshold)}">
+  `;
+  box.querySelector(".remove").addEventListener("click", () => { box.remove(); render(); });
+  box.addEventListener("input", render);
+  box.addEventListener("change", render);
+  assetsEl.appendChild(box);
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function val(id) { return document.getElementById(id).value.trim(); }
+
+function build() {
+  const mail = val("mail");
+  const list = [...assetsEl.querySelectorAll(".asset")].map(b => ({
+    name: b.querySelector(".a-name").value.trim(),
+    symbol: b.querySelector(".a-symbol").value.trim(),
+    threshold: parseFloat(b.querySelector(".a-threshold").value),
+    currency: b.querySelector(".a-currency").value
+  }));
+
+  const problems = [];
+  if (!mail) problems.push("Mailadresse fehlt.");
+  if (!list.length) problems.push("Mindestens eine Position eintragen.");
+  list.forEach((it, i) => {
+    if (!it.symbol) problems.push(`Position ${i + 1}: Symbol fehlt.`);
+    if (!Number.isFinite(it.threshold)) problems.push(`Position ${i + 1}: Schwelle ist keine Zahl.`);
+  });
+
+  return {
+    problems,
+    config: {
+      smtp: {
+        host: val("host"),
+        port: parseInt(val("port"), 10) || 465,
+        user: mail,
+        password: "",
+        from: mail,
+        to: mail
+      },
+      interval_minutes: parseInt(val("interval"), 10) || 10,
+      cooldown_hours: parseFloat(val("cooldown")) || 0,
+      watchlist: list.map(it => ({
+        name: it.name || it.symbol,
+        symbol: it.symbol,
+        threshold: Number.isFinite(it.threshold) ? it.threshold : 0,
+        currency: it.currency
+      }))
+    }
+  };
+}
+
+function render() {
+  const { problems, config } = build();
+  document.getElementById("json").textContent = JSON.stringify(config, null, 2);
+  document.getElementById("error").textContent = problems.join(" ");
+  document.getElementById("copy").disabled = problems.length > 0;
+}
+
+document.getElementById("add").addEventListener("click", () => { addAsset(); render(); });
+
+document.getElementById("copy").addEventListener("click", async () => {
+  const text = document.getElementById("json").textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+  const tag = document.getElementById("copied");
+  tag.classList.add("show");
+  setTimeout(() => tag.classList.remove("show"), 1400);
+});
+
+document.querySelectorAll("#mail, #host, #port, #interval, #cooldown")
+  .forEach(el => el.addEventListener("input", render));
+
+START.forEach(addAsset);
+render();
+</script>
+</body>
+</html>
