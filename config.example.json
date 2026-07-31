@@ -1,0 +1,26 @@
+{
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 465,
+    "user": "deine.adresse@gmail.com",
+    "password": "",
+    "from": "deine.adresse@gmail.com",
+    "to": "deine.adresse@gmail.com"
+  },
+  "interval_minutes": 10,
+  "cooldown_hours": 12,
+  "watchlist": [
+    {
+      "name": "S&P 500",
+      "symbol": "^GSPC",
+      "threshold": 5000.0,
+      "currency": "USD"
+    },
+    {
+      "name": "Vanguard FTSE All-World (VWCE)",
+      "symbol": "VWCE.DE",
+      "threshold": 100.0,
+      "currency": "EUR"
+    }
+  ]
+}
