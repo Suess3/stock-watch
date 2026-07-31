@@ -21,7 +21,7 @@
     {
       "name": "Vanguard FTSE All-World (VWCE)",
       "symbol": "VWCE.DE",
-      "threshold": 162,
+      "threshold": 163,
       "currency": "EUR"
     }
   ]
