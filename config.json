@@ -7,22 +7,22 @@
     "from": "johannes.autobot@gmail.com",
     "to": "johannes.su3@gmail.com"
   },
-  "interval_minutes": 10,
+  "interval_minutes": 20,
   "cooldown_hours": 12,
+  "run_until": "2026-08-07",
+  "history_minutes": 30,
   "watchlist": [
     {
       "name": "S&P 500",
       "symbol": "^GSPC",
-      "threshold": 5000.0,
+      "threshold": 7350,
       "currency": "USD"
     },
     {
       "name": "Vanguard FTSE All-World (VWCE)",
       "symbol": "VWCE.DE",
-      "threshold": 100.0,
+      "threshold": 162,
       "currency": "EUR"
     }
-  ],
-  "run_until": "",
-  "history_minutes": 30
+  ]
 }
