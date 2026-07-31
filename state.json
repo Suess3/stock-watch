@@ -1,7 +1,7 @@
 {
   "VWCE.DE": {
-    "below": false,
-    "last_alert": null
+    "below": true,
+    "last_alert": "2026-07-31T16:22:32.185725+00:00"
   },
   "^GSPC": {
     "below": false,
@@ -854,5 +854,5 @@
       ]
     ]
   },
-  "__last_check": "2026-07-31T16:19:06+00:00"
+  "__last_check": "2026-07-31T16:22:32+00:00"
 }
