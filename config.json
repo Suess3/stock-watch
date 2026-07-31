@@ -23,12 +23,6 @@
       "symbol": "VWCE.DE",
       "threshold": 163,
       "currency": "EUR"
-    },
-    {
-      "name": "VWCE Frankfurt (Test)",
-      "symbol": "VWCE.F",
-      "threshold": 1.0,
-      "currency": "EUR"
     }
   ]
 }
