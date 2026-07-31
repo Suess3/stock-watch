@@ -121,6 +121,18 @@ def load_config() -> dict:
     if not cfg["smtp"]["from"]:
         cfg["smtp"]["from"] = cfg["smtp"]["user"]
 
+    # Google zeigt App-Passwoerter in Viererbloecken an. Kopiert man sie aus
+    # dem Browser, landen dort echte oder geschuetzte Leerzeichen (\xa0), an
+    # denen der SMTP-Login scheitert - beim geschuetzten schon vor dem Senden.
+    # str.split() erkennt beide Varianten.
+    if cfg["smtp"].get("password"):
+        cfg["smtp"]["password"] = "".join(str(cfg["smtp"]["password"]).split())
+
+    # Adressen vertragen ebenfalls keine unsichtbaren Randzeichen
+    for field in ("host", "user", "from", "to"):
+        if cfg["smtp"].get(field):
+            cfg["smtp"][field] = str(cfg["smtp"][field]).strip()
+
     return cfg
 
 
