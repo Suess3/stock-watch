@@ -1,0 +1,4 @@
+# GitHub zaehlt den Ordner docs/ sonst als Dokumentation und laesst ihn aus
+# der Sprachstatistik heraus. Hier liegt aber die Weboberflaeche, also Quellcode.
+docs/** linguist-documentation=false
+docs/index.html linguist-detectable=true
