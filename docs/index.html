@@ -247,6 +247,7 @@
       <div class="actions">
         <button type="button" class="primary" id="copy">config.json kopieren</button>
         <a href="https://github.com/Suess3/stock-watch/edit/main/config.json" target="_blank" rel="noopener"><button type="button">GitHub-Editor</button></a>
+        <button type="button" id="reset">zurücksetzen</button>
         <span class="ok" id="ok">kopiert</span>
       </div>
     </form>
@@ -503,6 +504,7 @@ function build() {
   $("json").textContent = JSON.stringify(out, null, 2);
   $("err").textContent = problems.join(" ");
   $("copy").disabled = problems.length > 0;
+  saveForm();
 
   // Schwellenlinie in den Charts mitziehen
   const changed = list.some((it, i) => it.threshold !== cfg.watchlist[i].threshold);
@@ -530,6 +532,69 @@ $("copy").addEventListener("click", async () => {
   setTimeout(() => $("ok").classList.remove("show"), 1400);
 });
 
+/* ---------------- Eingaben ueber das Neuladen retten ----------------
+   Die Werte stehen sonst nur in der noch nicht committeten config.json und
+   waeren beim Neuladen weg. Nur dieser Browser, nichts verlaesst das Geraet. */
+const STORE = "stock-watch:form";
+
+function saveForm() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify({
+      mail: $("mail").value,
+      dur: $("dur").value,
+      until: $("until").value,
+      interval: $("interval").value,
+      cooldown: $("cooldown").value,
+      limits: cfg.watchlist.map((it, i) => [it.symbol, $(`lim${i}`)?.value])
+    }));
+  } catch { /* privater Modus o.ae. - dann eben ohne */ }
+}
+
+function restoreForm() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(STORE) || "null"); } catch { return false; }
+  if (!saved) return false;
+
+  if (saved.mail) $("mail").value = saved.mail;
+  if (saved.interval) $("interval").value = saved.interval;
+  if (saved.cooldown) $("cooldown").value = saved.cooldown;
+  if (saved.dur !== undefined) {
+    $("dur").value = saved.dur;
+    $("dateWrap").hidden = saved.dur !== "custom";
+    if (saved.until) $("until").value = saved.until;
+  }
+  // Schwellen ueber das Symbol zuordnen, nicht ueber die Position
+  (saved.limits || []).forEach(([symbol, value]) => {
+    const i = cfg.watchlist.findIndex(it => it.symbol === symbol);
+    if (i >= 0 && value !== undefined && value !== null && $(`lim${i}`)) $(`lim${i}`).value = value;
+  });
+  return true;
+}
+
+$("reset").addEventListener("click", () => {
+  try { localStorage.removeItem(STORE); } catch {}
+  location.reload();
+});
+
+function showStamp(restored) {
+  const points = Object.values(history).reduce((n, a) => n + a.length, 0);
+  const newest = Object.values(history).flat().map(p => p[0]).sort().pop();
+  const geladen = new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  $("stamp").textContent = points
+    ? `${points} Messpunkte, zuletzt ${newest.replace("T", " ").replace("+00:00", "")} UTC`
+      + ` · abgerufen ${geladen}`
+      + (restored ? " · Eingaben aus diesem Browser wiederhergestellt" : "")
+    : "Noch keine Kursdaten — der Workflow sammelt sie ab dem nächsten Lauf.";
+}
+
+async function refresh() {
+  const s = await grab("state.json", null);
+  if (!s) return;
+  history = s.__history || {};
+  showStamp(false);
+  renderCharts();
+}
+
 (async function init() {
   const [c, s] = await Promise.all([
     grab("config.json", FALLBACK),
@@ -547,15 +612,17 @@ $("copy").addEventListener("click", async () => {
     $("until").value = String(cfg.run_until).slice(0, 10);
   }
 
-  const points = Object.values(history).reduce((n, a) => n + a.length, 0);
-  const newest = Object.values(history).flat().map(p => p[0]).sort().pop();
-  $("stamp").textContent = points
-    ? `${points} Messpunkte, zuletzt ${newest.replace("T", " ").replace("+00:00", "")} UTC`
-    : "Noch keine Kursdaten — der Workflow sammelt sie ab dem nächsten Lauf.";
-
   renderLimits();
+  const restored = restoreForm();
+  showStamp(restored);
   renderCharts();
   build();
+
+  // Neue Messpunkte nachladen, ohne dass man die Seite neu laden muss
+  setInterval(refresh, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refresh();
+  });
 })();
 </script>
 </body>
