@@ -144,12 +144,6 @@
   input:focus, select:focus { outline: 2px solid var(--series); outline-offset: -1px; }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
   .hint { font-size: .76rem; color: var(--muted); margin: .3rem 0 0; }
-  .fixed {
-    margin: 0; padding: .45rem .6rem; font-size: .92rem;
-    border: 1px dashed var(--axis); border-radius: 6px;
-    background: var(--plane); color: var(--ink-2);
-    font-family: var(--mono);
-  }
   button {
     font: inherit; padding: .5rem 1rem; border-radius: 6px;
     border: 1px solid var(--axis); background: var(--plane); color: var(--ink); cursor: pointer;
@@ -210,14 +204,10 @@
     <form id="cfg" autocomplete="off">
       <fieldset>
         <legend>Mail</legend>
-        <label>Absender — fest</label>
-        <p class="fixed" id="sender">johannes.autobot@gmail.com</p>
-        <p class="hint">Das Bot-Konto, über das verschickt wird. Nur hierfür existiert ein
-           App-Passwort (Secret <code>SMTP_PASS</code>).</p>
         <label for="mail">Empfänger — hierhin geht der Alarm</label>
         <input id="mail" type="email" placeholder="dein.name@gmail.com">
-        <p class="hint">Beliebige Adresse, kein Passwort nötig. Bei GitHub Actions gewinnen
-           die Secrets <code>SMTP_USER</code> und <code>MAIL_TO</code> über diese Felder.</p>
+        <p class="hint">Beliebige Adresse, kein Passwort nötig. Verschickt wird über ein festes
+           Bot-Konto. Bei GitHub Actions gewinnt das Secret <code>MAIL_TO</code> über dieses Feld.</p>
       </fieldset>
 
       <fieldset>
@@ -550,7 +540,6 @@ $("copy").addEventListener("click", async () => {
   cfg = { ...FALLBACK, ...c, smtp: { ...FALLBACK.smtp, ...(c.smtp || {}) } };
   history = s.__history || {};
 
-  $("sender").textContent = SENDER;
   $("mail").value = cfg.smtp.to || "";
   $("interval").value = cfg.interval_minutes ?? 10;
   $("cooldown").value = cfg.cooldown_hours ?? 12;
