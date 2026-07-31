@@ -144,6 +144,12 @@
   input:focus, select:focus { outline: 2px solid var(--series); outline-offset: -1px; }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
   .hint { font-size: .76rem; color: var(--muted); margin: .3rem 0 0; }
+  .fixed {
+    margin: 0; padding: .45rem .6rem; font-size: .92rem;
+    border: 1px dashed var(--axis); border-radius: 6px;
+    background: var(--plane); color: var(--ink-2);
+    font-family: var(--mono);
+  }
   button {
     font: inherit; padding: .5rem 1rem; border-radius: 6px;
     border: 1px solid var(--axis); background: var(--plane); color: var(--ink); cursor: pointer;
@@ -204,10 +210,10 @@
     <form id="cfg" autocomplete="off">
       <fieldset>
         <legend>Mail</legend>
-        <label for="sender">Absender — das Konto, über das verschickt wird</label>
-        <input id="sender" type="email" placeholder="bot.konto@gmail.com">
-        <p class="hint">Nur hierfür braucht es ein Passwort (Secret <code>SMTP_PASS</code>),
-           und zwar ein App-Passwort <em>dieses</em> Kontos.</p>
+        <label>Absender — fest</label>
+        <p class="fixed" id="sender">johannes.autobot@gmail.com</p>
+        <p class="hint">Das Bot-Konto, über das verschickt wird. Nur hierfür existiert ein
+           App-Passwort (Secret <code>SMTP_PASS</code>).</p>
         <label for="mail">Empfänger — hierhin geht der Alarm</label>
         <input id="mail" type="email" placeholder="dein.name@gmail.com">
         <p class="hint">Beliebige Adresse, kein Passwort nötig. Bei GitHub Actions gewinnen
@@ -262,6 +268,9 @@
 <script>
 const REPO = "Suess3/stock-watch";
 const RAW  = `https://raw.githubusercontent.com/${REPO}/main`;
+// Verschickt wird immer ueber das Bot-Konto - nur zu diesem gehoert das
+// App-Passwort im Secret SMTP_PASS. Deshalb kein Eingabefeld.
+const SENDER = "johannes.autobot@gmail.com";
 
 const FALLBACK = {
   smtp: { host: "smtp.gmail.com", port: 465, user: "", password: "", from: "", to: "" },
@@ -467,7 +476,6 @@ function runUntil() {
 
 function build() {
   const mail = $("mail").value.trim();
-  const sender = $("sender").value.trim();
   const list = cfg.watchlist.map((item, i) => ({
     name: item.name, symbol: item.symbol,
     threshold: parseFloat($(`lim${i}`).value),
@@ -475,7 +483,6 @@ function build() {
   }));
 
   const problems = [];
-  if (!sender) problems.push("Absenderadresse fehlt.");
   if (!mail) problems.push("Empfängeradresse fehlt.");
   list.forEach((it, i) => {
     if (!Number.isFinite(it.threshold)) problems.push(`${it.name}: Schwelle ist keine Zahl.`);
@@ -485,7 +492,7 @@ function build() {
     smtp: {
       host: cfg.smtp?.host || "smtp.gmail.com",
       port: parseInt(cfg.smtp?.port, 10) || 465,
-      user: sender, password: "", from: sender, to: mail
+      user: SENDER, password: "", from: SENDER, to: mail
     },
     interval_minutes: parseInt($("interval").value, 10) || 10,
     cooldown_hours: parseFloat($("cooldown").value) || 0,
@@ -514,7 +521,7 @@ $("dur").addEventListener("change", () => {
   $("dateWrap").hidden = $("dur").value !== "custom";
   build();
 });
-["sender", "mail", "interval", "cooldown", "until"].forEach(id => $(id).addEventListener("input", build));
+["mail", "interval", "cooldown", "until"].forEach(id => $(id).addEventListener("input", build));
 
 $("copy").addEventListener("click", async () => {
   const text = $("json").textContent;
@@ -536,7 +543,7 @@ $("copy").addEventListener("click", async () => {
   cfg = { ...FALLBACK, ...c, smtp: { ...FALLBACK.smtp, ...(c.smtp || {}) } };
   history = s.__history || {};
 
-  $("sender").value = cfg.smtp.user || "";
+  $("sender").textContent = SENDER;
   $("mail").value = cfg.smtp.to || "";
   $("interval").value = cfg.interval_minutes ?? 10;
   $("cooldown").value = cfg.cooldown_hours ?? 12;
