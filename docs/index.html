@@ -191,11 +191,9 @@
   </header>
 
   <p class="note">
-    Die Seite läuft nur im Browser. Sie liest die vom Workflow gesammelten Kurse aus
-    <code>state.json</code> und erzeugt die fertige <code>config.json</code> —
-    <strong>ins Repo schreiben kann sie nichts</strong>, den Commit machst du selbst.
-    Die Adressen wirken nur lokal: bei GitHub Actions gewinnen die Secrets
-    <code>SMTP_USER</code> und <code>MAIL_TO</code>. Das Passwort steht nie in dieser Datei.
+    <strong>Wirksam erst nach dem Commit.</strong> Der Alarm richtet sich nach der
+    <code>config.json</code> im Repo — hier geänderte Werte gelten erst, wenn du die Datei
+    dort ersetzt hast. Diese Seite kann nichts ins Repo schreiben.
   </p>
 
   <div class="split">
@@ -288,11 +286,13 @@ async function grab(path, fallback) {
    Zwei getrennte Charts statt einer Grafik mit zwei Achsen: die Werte liegen
    in verschiedenen Waehrungen und Groessenordnungen, eine gemeinsame Achse
    waere irrefuehrend.                                                        */
-/* Wertebereich der y-Achse. Bewusst nur aus den Kursen, ohne die Schwelle -
-   sonst staucht eine weit entfernte Schwelle die Kurve zur Geraden. */
-function domain(ys) {
-  const lo0 = Math.min(...ys), hi0 = Math.max(...ys);
-  const pad = (hi0 - lo0) * 0.15 || Math.abs(hi0 * 0.02) || 1;
+/* Wertebereich der y-Achse. Die Schwelle zaehlt mit, damit ihre Linie immer
+   im Bild ist. Liegt sie weit vom Kurs entfernt, wird die Kurve dadurch
+   flach - so gewuenscht. */
+function domain(ys, limit) {
+  const vals = Number.isFinite(limit) ? [...ys, limit] : ys;
+  const lo0 = Math.min(...vals), hi0 = Math.max(...vals);
+  const pad = (hi0 - lo0) * 0.08 || Math.abs(hi0 * 0.02) || 1;
   return [lo0 - pad, hi0 + pad];
 }
 
@@ -308,8 +308,7 @@ function chart(series, limit, currency) {
 
   const xs = series.map(p => new Date(p[0]).getTime());
   const ys = series.map(p => p[1]);
-  const [lo, hi] = domain(ys);
-  const limitVisible = limit >= lo && limit <= hi;
+  const [lo, hi] = domain(ys, limit);
   const t0 = Math.min(...xs), t1 = Math.max(...xs);
 
   // Gleicher Abstand je Messpunkt statt echter Zeitachse. Sonst reissen
@@ -334,14 +333,13 @@ function chart(series, limit, currency) {
   const dtf = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const xFirst = dtf.format(new Date(t0)), xLast = dtf.format(new Date(t1));
 
-  const gap = (Math.min(...ys) - limit) / limit * 100;
-  const limitMark = limitVisible
-    ? `<line x1="${ML}" y1="${ly.toFixed(1)}" x2="${W - MR}" y2="${ly.toFixed(1)}"
-             stroke="var(--limit)" stroke-width="2" stroke-dasharray="5 4"/>
-       <text x="${W - MR}" y="${(ly - 6).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--limit)"
-             style="font-variant-numeric:tabular-nums">Schwelle ${fmt(limit, 0)} ${currency}</text>`
-    : `<text x="${W - MR}" y="${(MT + ih - 5).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--limit)"
-             style="font-variant-numeric:tabular-nums">Schwelle ${fmt(limit, 0)} ${currency} liegt ${fmt(Math.abs(gap), 0)} % ${gap > 0 ? "unter" : "über"} der Skala</text>`;
+  // Beschriftung nach innen klappen, wenn die Linie am oberen Rand klebt
+  const labelY = ly < MT + 16 ? ly + 14 : ly - 6;
+  const limitMark = `
+    <line x1="${ML}" y1="${ly.toFixed(1)}" x2="${W - MR}" y2="${ly.toFixed(1)}"
+          stroke="var(--limit)" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="${W - MR}" y="${labelY.toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--limit)"
+          style="font-variant-numeric:tabular-nums">Schwelle ${fmt(limit, 0)} ${currency}</text>`;
 
   return `
   <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" preserveAspectRatio="xMidYMid meet">
@@ -358,7 +356,7 @@ function chart(series, limit, currency) {
   </svg>`;
 }
 
-function wireHover(wrap, series, currency) {
+function wireHover(wrap, series, currency, limit) {
   const svg = wrap.querySelector("svg");
   if (!svg) return;
   const hit = svg.querySelector(".hit"), cross = svg.querySelector(".cross"), dot = svg.querySelector(".cdot");
@@ -380,7 +378,7 @@ function wireHover(wrap, series, currency) {
 
     const px = X(bi);
     const xs = series.map(p => new Date(p[0]).getTime());
-    const [lo, hi] = domain(series.map(p => p[1]));
+    const [lo, hi] = domain(series.map(p => p[1]), limit);
     const py = 12 + (240 - 12 - 26) - (series[bi][1] - lo) / (hi - lo) * (240 - 12 - 26);
 
     cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("opacity", ".6");
@@ -441,7 +439,7 @@ function renderCharts() {
     }
 
     host.appendChild(card);
-    if (series.length >= 2) wireHover(wrap, series, item.currency || "");
+    if (series.length >= 2) wireHover(wrap, series, item.currency || "", item.threshold);
   });
 }
 
