@@ -1,0 +1,10 @@
+{
+  "VWCE.DE": {
+    "below": false,
+    "last_alert": null
+  },
+  "^GSPC": {
+    "below": false,
+    "last_alert": null
+  }
+}
