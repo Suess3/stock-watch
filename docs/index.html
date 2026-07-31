@@ -194,8 +194,8 @@
     Die Seite läuft nur im Browser. Sie liest die vom Workflow gesammelten Kurse aus
     <code>state.json</code> und erzeugt die fertige <code>config.json</code> —
     <strong>ins Repo schreiben kann sie nichts</strong>, den Commit machst du selbst.
-    Die Mailadresse wirkt nur lokal: bei GitHub Actions gewinnen die Secrets
-    <code>SMTP_USER</code> und <code>MAIL_TO</code>.
+    Die Adressen wirken nur lokal: bei GitHub Actions gewinnen die Secrets
+    <code>SMTP_USER</code> und <code>MAIL_TO</code>. Das Passwort steht nie in dieser Datei.
   </p>
 
   <div class="split">
@@ -204,9 +204,14 @@
     <form id="cfg" autocomplete="off">
       <fieldset>
         <legend>Mail</legend>
-        <label for="mail">Adresse</label>
+        <label for="sender">Absender — das Konto, über das verschickt wird</label>
+        <input id="sender" type="email" placeholder="bot.konto@gmail.com">
+        <p class="hint">Nur hierfür braucht es ein Passwort (Secret <code>SMTP_PASS</code>),
+           und zwar ein App-Passwort <em>dieses</em> Kontos.</p>
+        <label for="mail">Empfänger — hierhin geht der Alarm</label>
         <input id="mail" type="email" placeholder="dein.name@gmail.com">
-        <p class="hint">Empfänger bei GitHub Actions über das Secret <code>MAIL_TO</code>.</p>
+        <p class="hint">Beliebige Adresse, kein Passwort nötig. Bei GitHub Actions gewinnen
+           die Secrets <code>SMTP_USER</code> und <code>MAIL_TO</code> über diese Felder.</p>
       </fieldset>
 
       <fieldset>
@@ -454,6 +459,7 @@ function runUntil() {
 
 function build() {
   const mail = $("mail").value.trim();
+  const sender = $("sender").value.trim();
   const list = cfg.watchlist.map((item, i) => ({
     name: item.name, symbol: item.symbol,
     threshold: parseFloat($(`lim${i}`).value),
@@ -461,7 +467,8 @@ function build() {
   }));
 
   const problems = [];
-  if (!mail) problems.push("Mailadresse fehlt.");
+  if (!sender) problems.push("Absenderadresse fehlt.");
+  if (!mail) problems.push("Empfängeradresse fehlt.");
   list.forEach((it, i) => {
     if (!Number.isFinite(it.threshold)) problems.push(`${it.name}: Schwelle ist keine Zahl.`);
   });
@@ -470,7 +477,7 @@ function build() {
     smtp: {
       host: cfg.smtp?.host || "smtp.gmail.com",
       port: parseInt(cfg.smtp?.port, 10) || 465,
-      user: mail, password: "", from: mail, to: mail
+      user: sender, password: "", from: sender, to: mail
     },
     interval_minutes: parseInt($("interval").value, 10) || 10,
     cooldown_hours: parseFloat($("cooldown").value) || 0,
@@ -499,7 +506,7 @@ $("dur").addEventListener("change", () => {
   $("dateWrap").hidden = $("dur").value !== "custom";
   build();
 });
-["mail", "interval", "cooldown", "until"].forEach(id => $(id).addEventListener("input", build));
+["sender", "mail", "interval", "cooldown", "until"].forEach(id => $(id).addEventListener("input", build));
 
 $("copy").addEventListener("click", async () => {
   const text = $("json").textContent;
@@ -521,7 +528,8 @@ $("copy").addEventListener("click", async () => {
   cfg = { ...FALLBACK, ...c, smtp: { ...FALLBACK.smtp, ...(c.smtp || {}) } };
   history = s.__history || {};
 
-  $("mail").value = cfg.smtp.to || cfg.smtp.user || "";
+  $("sender").value = cfg.smtp.user || "";
+  $("mail").value = cfg.smtp.to || "";
   $("interval").value = cfg.interval_minutes ?? 10;
   $("cooldown").value = cfg.cooldown_hours ?? 12;
   if (cfg.run_until) {

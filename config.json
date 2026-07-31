@@ -2,9 +2,9 @@
   "smtp": {
     "host": "smtp.gmail.com",
     "port": 465,
-    "user": "johannes.su3@gmail.com",
+    "user": "johannes.autobot@gmail.com",
     "password": "",
-    "from": "johannes.su3@gmail.com",
+    "from": "johannes.autobot@gmail.com",
     "to": "johannes.su3@gmail.com"
   },
   "interval_minutes": 10,
