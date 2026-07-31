@@ -22,5 +22,7 @@
       "threshold": 100.0,
       "currency": "EUR"
     }
-  ]
+  ],
+  "run_until": "",
+  "history_minutes": 30
 }

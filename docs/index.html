@@ -306,6 +306,12 @@ function domain(ys) {
   return [lo0 - pad, hi0 + pad];
 }
 
+/* x-Position eines Messpunkts: gleicher Abstand je Punkt, unabhaengig davon,
+   wie viel echte Zeit dazwischen liegt. */
+function xPos(count, left, width) {
+  return i => left + (count <= 1 ? width / 2 : i / (count - 1) * width);
+}
+
 function chart(series, limit, currency) {
   const W = 640, H = 240, ML = 58, MR = 16, MT = 12, MB = 26;
   const iw = W - ML - MR, ih = H - MT - MB;
@@ -316,7 +322,9 @@ function chart(series, limit, currency) {
   const limitVisible = limit >= lo && limit <= hi;
   const t0 = Math.min(...xs), t1 = Math.max(...xs);
 
-  const X = t => ML + (t1 === t0 ? iw / 2 : (t - t0) / (t1 - t0) * iw);
+  // Gleicher Abstand je Messpunkt statt echter Zeitachse. Sonst reissen
+  // Nacht und Wochenende breite Luecken auf, in denen die Boerse zu ist.
+  const X = xPos(series.length, ML, iw);
   const Y = v => MT + ih - (v - lo) / (hi - lo) * ih;
 
   const ticks = 4;
@@ -327,10 +335,10 @@ function chart(series, limit, currency) {
     labels += `<text x="${ML - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--muted)" style="font-variant-numeric:tabular-nums">${fmt(v, 0)}</text>`;
   }
 
-  const dLine = series.map((p, i) => `${i ? "L" : "M"}${X(xs[i]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+  const dLine = series.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
   const ly = Y(limit);
   const dots = series.length <= 40
-    ? series.map((p, i) => `<circle cx="${X(xs[i]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="4" fill="var(--series)" stroke="var(--surface)" stroke-width="2"/>`).join("")
+    ? series.map((p, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="4" fill="var(--series)" stroke="var(--surface)" stroke-width="2"/>`).join("")
     : "";
 
   const dtf = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -374,15 +382,14 @@ function wireHover(wrap, series, currency) {
     const box = svg.getBoundingClientRect();
     const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
     const vx = (cx - box.left) / box.width * 640;
-    // Naehesten Punkt ueber die Zeitachse bestimmen
-    const ML = 58, iw = 640 - 58 - 16;
-    const xs = series.map(p => new Date(p[0]).getTime());
-    const t0 = Math.min(...xs), t1 = Math.max(...xs);
-    const t = t1 === t0 ? t0 : t0 + (vx - ML) / iw * (t1 - t0);
-    let bi = 0, bd = Infinity;
-    xs.forEach((x, i) => { const d = Math.abs(x - t); if (d < bd) { bd = d; bi = i; } });
+    // Punkte stehen in gleichen Abstaenden, also ueber den Index suchen
+    const ML = 58, iw = 640 - 58 - 16, n = series.length;
+    const X = xPos(n, ML, iw);
+    const raw = n <= 1 ? 0 : Math.round((vx - ML) / iw * (n - 1));
+    const bi = Math.max(0, Math.min(n - 1, raw));
 
-    const px = t1 === t0 ? ML + iw / 2 : ML + (xs[bi] - t0) / (t1 - t0) * iw;
+    const px = X(bi);
+    const xs = series.map(p => new Date(p[0]).getTime());
     const [lo, hi] = domain(series.map(p => p[1]));
     const py = 12 + (240 - 12 - 26) - (series[bi][1] - lo) / (hi - lo) * (240 - 12 - 26);
 

@@ -180,7 +180,7 @@ BACKFILL_MAX_TRIES = 5
 
 
 def backfill_history(state: dict, symbol: str, min_points: int = 24) -> bool:
-    """Traegt einmalig die letzte Woche stuendlich nach.
+    """Traegt einmalig die letzte Woche halbstuendlich nach.
 
     Sonst startet die Grafik bei null und braucht Tage, bis sie etwas zeigt.
     Laeuft nur, solange zu wenige Punkte da sind, und gibt nach einigen
@@ -196,7 +196,7 @@ def backfill_history(state: dict, symbol: str, min_points: int = 24) -> bool:
         return False
 
     try:
-        hist = yf.Ticker(symbol).history(period="7d", interval="60m")
+        hist = yf.Ticker(symbol).history(period="7d", interval="30m")
     except Exception as exc:
         tries[symbol] = tries.get(symbol, 0) + 1
         print(f"    -> Historie fuer {symbol} nicht abrufbar ({exc}).")
@@ -213,7 +213,7 @@ def backfill_history(state: dict, symbol: str, min_points: int = 24) -> bool:
 
     if not points:
         tries[symbol] = tries.get(symbol, 0) + 1
-        print(f"    -> Keine Stundenwerte fuer {symbol} erhalten.")
+        print(f"    -> Keine Halbstundenwerte fuer {symbol} erhalten.")
         return True
 
     # Eigene Messwerte haben Vorrang vor den nachgetragenen.
@@ -221,7 +221,7 @@ def backfill_history(state: dict, symbol: str, min_points: int = 24) -> bool:
     merged.update({p[0]: p for p in series})
     history[symbol] = [merged[k] for k in sorted(merged)][-HISTORY_MAX_POINTS:]
     tries.pop(symbol, None)
-    print(f"    -> {len(points)} Stundenwerte der letzten Woche fuer {symbol} nachgetragen.")
+    print(f"    -> {len(points)} Halbstundenwerte der letzten Woche fuer {symbol} nachgetragen.")
     return True
 
 
