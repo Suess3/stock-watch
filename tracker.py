@@ -52,6 +52,12 @@ DEFAULT_CONFIG = {
     # Wie lange nach einer Alarm-Mail Ruhe ist, solange der Kurs unter der
     # Schwelle bleibt. Sonst kaeme alle 10 Minuten eine Mail.
     "cooldown_hours": 12,
+    # Datum (ISO, z.B. "2026-12-31"), ab dem nicht mehr geprueft wird.
+    # Leer = laeuft unbegrenzt.
+    "run_until": "",
+    # Mindestabstand zwischen zwei Punkten der Kurshistorie in state.json.
+    # Kleiner Wert = feinere Grafik, aber mehr Commits durch den Workflow.
+    "history_minutes": 30,
     "watchlist": [
         {
             "name": "S&P 500",
@@ -143,6 +149,50 @@ def save_state(state: dict) -> None:
         fh.write("\n")
 
 
+# Kurshistorie liegt unter einem eigenen Schluessel im selben state.json.
+# Grund: der Workflow committet diese Datei ohnehin schon zurueck, eine
+# zweite Datei haette eine Aenderung an watcher.yml erfordert.
+HISTORY_KEY = "__history"
+HISTORY_MAX_POINTS = 1500
+
+
+def record_price(state: dict, symbol: str, price: float, now: datetime,
+                 min_gap_minutes: float) -> bool:
+    """Haengt einen Kurspunkt an, wenn der letzte lang genug her ist."""
+    history = state.setdefault(HISTORY_KEY, {})
+    series = history.setdefault(symbol, [])
+
+    if series:
+        try:
+            last = datetime.fromisoformat(series[-1][0])
+        except (ValueError, IndexError, TypeError):
+            last = None
+        if last and (now - last) < timedelta(minutes=min_gap_minutes):
+            return False
+
+    series.append([now.isoformat(timespec="minutes"), round(price, 4)])
+    del series[:-HISTORY_MAX_POINTS]
+    return True
+
+
+def run_until_passed(cfg: dict, now: datetime) -> bool:
+    """True, wenn das konfigurierte Enddatum ueberschritten ist."""
+    raw = str(cfg.get("run_until") or "").strip()
+    if not raw:
+        return False
+    try:
+        end = datetime.fromisoformat(raw)
+    except ValueError:
+        print(f"[WARN] run_until '{raw}' ist kein gueltiges Datum - wird ignoriert.")
+        return False
+    # Reines Datum ohne Uhrzeit meint den ganzen Tag, nicht dessen Beginn.
+    if "T" not in raw and " " not in raw:
+        end = end.replace(hour=23, minute=59, second=59)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    return now > end
+
+
 # --------------------------------------------------------------------------- #
 # Kursabfrage
 # --------------------------------------------------------------------------- #
@@ -209,7 +259,13 @@ def send_mail(cfg: dict, subject: str, body: str) -> None:
 def check_once(cfg: dict, dry_run: bool = False) -> int:
     state = load_state()
     now = datetime.now(timezone.utc)
+
+    if run_until_passed(cfg, now):
+        print(f"Laufzeit bis {cfg['run_until']} ist abgelaufen - keine Pruefung mehr.")
+        return 0
+
     cooldown = timedelta(hours=float(cfg.get("cooldown_hours", 12)))
+    history_gap = float(cfg.get("history_minutes", 30))
     triggered: list[str] = []
     state_changed = False
 
@@ -224,6 +280,9 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
         except Exception as exc:
             print(f"[FEHLER] {name} ({symbol}): {exc}")
             continue
+
+        if record_price(state, symbol, price, now, history_gap):
+            state_changed = True
 
         # Kopie, sonst wuerde die Aenderung unbemerkt bleiben (gleiche Referenz)
         entry = dict(state.get(symbol, {"below": False, "last_alert": None}))

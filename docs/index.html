@@ -3,320 +3,545 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ETF-Watcher — Konfigurator</title>
+<title>stock-watch</title>
 <style>
   :root {
-    --bg: #ffffff;
-    --panel: #f6f8fa;
-    --border: #d0d7de;
-    --text: #1f2328;
-    --muted: #59636e;
-    --accent: #1f6feb;
-    --ok: #1a7f37;
-    --warn-bg: #fff8c5;
-    --warn-border: #d4a72c;
-    --warn-text: #4d2d00;
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+    --plane:        #f9f9f7;
+    --surface:      #fcfcfb;
+    --ink:          #0b0b0b;
+    --ink-2:        #52514e;
+    --muted:        #898781;
+    --grid:         #e1e0d9;
+    --axis:         #c3c2b7;
+    --border:       rgba(11,11,11,0.10);
+    --series:       #2a78d6;
+    --limit:        #d03b3b;
+    --hero-bg:      #ffffff;
+    --hero-fg:      #000000;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0d1117;
-      --panel: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --muted: #9198a1;
-      --accent: #4493f8;
-      --ok: #3fb950;
-      --warn-bg: #272115;
-      --warn-border: #9e6a03;
-      --warn-text: #f2cc60;
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane:      #0d0d0d;
+      --surface:    #1a1a19;
+      --ink:        #ffffff;
+      --ink-2:      #c3c2b7;
+      --muted:      #898781;
+      --grid:       #2c2c2a;
+      --axis:       #383835;
+      --border:     rgba(255,255,255,0.10);
+      --series:     #3987e5;
+      --limit:      #d03b3b;
+      --hero-bg:    #000000;
+      --hero-fg:    #ffffff;
     }
   }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane: #0d0d0d; --surface: #1a1a19; --ink: #fff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+    --border: rgba(255,255,255,0.10); --series: #3987e5; --limit: #d03b3b;
+    --hero-bg: #000; --hero-fg: #fff;
+  }
+
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body {
     margin: 0;
-    padding: 2rem 1rem 4rem;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--plane);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     line-height: 1.5;
   }
-  .wrap { max-width: 1100px; margin: 0 auto; }
-  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
-  .lede { color: var(--muted); margin: 0 0 1.5rem; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
-  @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
-  fieldset {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1rem;
-    margin: 0 0 1rem;
-    background: var(--panel);
+
+  /* ---------- Titelseite ---------- */
+  .hero {
+    height: 100vh;
+    height: 100svh;
+    background: var(--hero-bg);
+    color: var(--hero-fg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 0 2vw;
   }
-  legend { font-weight: 600; padding: 0 .4rem; }
-  label { display: block; font-size: .85rem; color: var(--muted); margin: .6rem 0 .2rem; }
-  input, select {
-    width: 100%;
-    padding: .45rem .6rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg);
-    color: var(--text);
-    font: inherit;
-    font-size: .95rem;
-  }
-  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
-  .asset {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: .75rem;
-    margin-bottom: .75rem;
-    background: var(--bg);
-  }
-  .asset-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
-  .asset-head strong { font-size: .9rem; }
-  button {
-    font: inherit;
-    padding: .45rem .9rem;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--panel);
-    color: var(--text);
-    cursor: pointer;
-  }
-  button:hover { border-color: var(--accent); }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-  button.link { border: none; background: none; color: var(--accent); padding: .2rem .3rem; }
-  .out {
-    position: sticky; top: 1rem;
-  }
-  pre {
+  .hero h1 {
     margin: 0;
-    padding: 1rem;
-    background: var(--panel);
+    font-size: clamp(2.2rem, 14vw, 17rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: .9;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .hero p {
+    margin: 1.5rem 0 0;
+    font-size: clamp(.8rem, 1.6vw, 1.05rem);
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    opacity: .55;
+  }
+  .scroll-hint {
+    position: absolute;
+    bottom: 2.5rem;
+    color: inherit;
+    text-decoration: none;
+    opacity: .5;
+    font-size: 2rem;
+    line-height: 1;
+    animation: bob 2s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(7px); } }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .scroll-hint { animation: none; }
+  }
+
+  /* ---------- Dashboard ---------- */
+  .board { max-width: 1240px; margin: 0 auto; padding: 4rem 1.25rem 5rem; }
+  .board > header { margin-bottom: 2rem; }
+  .board h2 { font-size: 1.35rem; margin: 0 0 .25rem; }
+  .board header p { margin: 0; color: var(--ink-2); font-size: .95rem; }
+
+  .split { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(0,1fr); gap: 1.5rem; align-items: start; }
+  @media (max-width: 940px) { .split { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    font-family: var(--mono);
-    font-size: .82rem;
-    overflow-x: auto;
-    max-height: 60vh;
-    overflow-y: auto;
+    border-radius: 10px;
+    padding: 1.1rem 1.2rem 1rem;
+    margin-bottom: 1.25rem;
   }
-  .actions { display: flex; gap: .6rem; align-items: center; margin-top: .75rem; flex-wrap: wrap; }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  .card-head h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+  .card-head .sym { color: var(--muted); font-size: .8rem; font-family: var(--mono); }
+  .figure { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+  .figure .unit { font-size: .95rem; font-weight: 500; color: var(--ink-2); margin-left: .2rem; }
+  .sub { font-size: .82rem; color: var(--ink-2); margin-top: .1rem; }
+  svg.chart { display: block; width: 100%; height: auto; margin-top: .9rem; touch-action: pan-y; }
+  .empty { color: var(--muted); font-size: .87rem; padding: 2rem 0 1rem; text-align: center; }
+
+  details.table { margin-top: .5rem; }
+  details.table summary { cursor: pointer; font-size: .82rem; color: var(--ink-2); }
+  table { border-collapse: collapse; width: 100%; margin-top: .5rem; font-size: .8rem; }
+  th, td { text-align: right; padding: .25rem .5rem; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; }
+  .tscroll { max-height: 220px; overflow: auto; }
+
+  /* ---------- Formular ---------- */
+  form fieldset { border: 1px solid var(--border); border-radius: 8px; padding: .9rem 1rem 1rem; margin: 0 0 1rem; background: var(--surface); }
+  form legend { font-weight: 600; font-size: .9rem; padding: 0 .35rem; }
+  label { display: block; font-size: .8rem; color: var(--ink-2); margin: .65rem 0 .2rem; }
+  input, select {
+    width: 100%; padding: .45rem .6rem; font: inherit; font-size: .92rem;
+    border: 1px solid var(--axis); border-radius: 6px;
+    background: var(--plane); color: var(--ink);
+  }
+  input:focus, select:focus { outline: 2px solid var(--series); outline-offset: -1px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+  .hint { font-size: .76rem; color: var(--muted); margin: .3rem 0 0; }
+  button {
+    font: inherit; padding: .5rem 1rem; border-radius: 6px;
+    border: 1px solid var(--axis); background: var(--plane); color: var(--ink); cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--series); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary { background: var(--series); border-color: var(--series); color: #fff; font-weight: 600; }
+  .actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-top: .9rem; }
+  pre#json {
+    margin: .9rem 0 0; padding: .9rem; background: var(--plane);
+    border: 1px solid var(--border); border-radius: 8px;
+    font-family: var(--mono); font-size: .76rem;
+    max-height: 300px; overflow: auto;
+  }
   .note {
-    background: var(--warn-bg);
-    border: 1px solid var(--warn-border);
-    color: var(--warn-text);
-    border-radius: 6px;
-    padding: .7rem .9rem;
-    font-size: .85rem;
-    margin: 0 0 1rem;
+    border-left: 3px solid var(--limit); background: var(--surface);
+    padding: .7rem .9rem; border-radius: 0 6px 6px 0; font-size: .83rem;
+    color: var(--ink-2); margin: 0 0 1.25rem;
   }
-  .note code, .steps code { font-family: var(--mono); font-size: .95em; }
-  .steps { font-size: .88rem; color: var(--muted); padding-left: 1.2rem; }
-  .steps li { margin: .35rem 0; }
-  a { color: var(--accent); }
-  #copied { color: var(--ok); font-size: .85rem; opacity: 0; transition: opacity .15s; }
-  #copied.show { opacity: 1; }
-  .err { color: #cf222e; font-size: .85rem; }
-  @media (prefers-color-scheme: dark) { .err { color: #ff7b72; } }
+  .ok { color: #006300; font-size: .82rem; opacity: 0; transition: opacity .15s; }
+  @media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) .ok { color: #0ca30c; } }
+  .ok.show { opacity: 1; }
+  .err { color: var(--limit); font-size: .82rem; margin: .5rem 0 0; }
+  a { color: var(--series); }
+  code { font-family: var(--mono); font-size: .93em; }
+  .tip { position: absolute; pointer-events: none; opacity: 0; transition: opacity .1s;
+         background: var(--ink); color: var(--surface); font-size: .76rem;
+         padding: .3rem .5rem; border-radius: 5px; white-space: nowrap; transform: translate(-50%, -130%);
+         font-variant-numeric: tabular-nums; z-index: 5; }
+  .chart-wrap { position: relative; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>ETF-Watcher — Konfigurator</h1>
-  <p class="lede">Werte eintragen, JSON kopieren, im GitHub-Editor einfügen.</p>
 
-  <div class="note">
-    <strong>Wichtig:</strong> Die Seite läuft nur in deinem Browser und kann nichts ins Repo schreiben —
-    den Commit machst du selbst. Die <strong>Mailadressen wirken nur lokal</strong>: bei GitHub Actions
-    überschreiben die Secrets <code>SMTP_USER</code> und <code>MAIL_TO</code> diese Felder.
-    Empfänger änderst du deshalb in den
-    <a href="https://github.com/Suess3/stock-watch/settings/secrets/actions">Repository-Secrets</a>.
-    Das Passwort steht nie in dieser Datei.
-  </div>
+<section class="hero">
+  <h1>stock-watch</h1>
+  <p>Kursalarm per Mail</p>
+  <a class="scroll-hint" href="#board" aria-label="Nach unten scrollen">&darr;</a>
+</section>
 
-  <div class="cols">
-    <div>
+<main class="board" id="board">
+  <header>
+    <h2>Kurse und Einstellungen</h2>
+    <p id="stamp">Daten werden geladen …</p>
+  </header>
+
+  <p class="note">
+    Die Seite läuft nur im Browser. Sie liest die vom Workflow gesammelten Kurse aus
+    <code>state.json</code> und erzeugt die fertige <code>config.json</code> —
+    <strong>ins Repo schreiben kann sie nichts</strong>, den Commit machst du selbst.
+    Die Mailadresse wirkt nur lokal: bei GitHub Actions gewinnen die Secrets
+    <code>SMTP_USER</code> und <code>MAIL_TO</code>.
+  </p>
+
+  <div class="split">
+    <div id="charts"></div>
+
+    <form id="cfg" autocomplete="off">
       <fieldset>
         <legend>Mail</legend>
-        <label for="mail">Adresse (Absender und Empfänger)</label>
-        <input id="mail" type="email" value="johannes.su3@gmail.com" placeholder="dein.name@gmail.com">
-        <div class="row">
-          <div>
-            <label for="host">SMTP-Server</label>
-            <input id="host" value="smtp.gmail.com">
-          </div>
-          <div>
-            <label for="port">Port</label>
-            <input id="port" type="number" value="465">
-          </div>
-        </div>
+        <label for="mail">Adresse</label>
+        <input id="mail" type="email" placeholder="dein.name@gmail.com">
+        <p class="hint">Empfänger bei GitHub Actions über das Secret <code>MAIL_TO</code>.</p>
       </fieldset>
 
       <fieldset>
-        <legend>Takt</legend>
-        <div class="row">
+        <legend>Schwellen</legend>
+        <div id="limits"></div>
+        <p class="hint">Die Mail kommt, sobald der Kurs den Wert unterschreitet.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Laufzeit</legend>
+        <label for="dur">Wie lange soll überwacht werden?</label>
+        <select id="dur">
+          <option value="">unbegrenzt</option>
+          <option value="7">noch 1 Woche</option>
+          <option value="30">noch 1 Monat</option>
+          <option value="90">noch 3 Monate</option>
+          <option value="365">noch 1 Jahr</option>
+          <option value="custom">bis zu einem Datum …</option>
+        </select>
+        <div id="dateWrap" hidden>
+          <label for="until">Enddatum</label>
+          <input id="until" type="date">
+        </div>
+        <div class="row2">
           <div>
-            <label for="interval">Prüfintervall (Minuten)</label>
+            <label for="interval">Intervall (Min.)</label>
             <input id="interval" type="number" min="1" value="10">
           </div>
           <div>
-            <label for="cooldown">Ruhezeit nach Alarm (Stunden)</label>
+            <label for="cooldown">Ruhe nach Alarm (Std.)</label>
             <input id="cooldown" type="number" min="0" step="0.5" value="12">
           </div>
         </div>
+        <p class="hint">Der Cron-Takt steht in <code>watcher.yml</code>; das Intervall hier gilt für den lokalen Dauerlauf.</p>
       </fieldset>
 
-      <fieldset>
-        <legend>Watchlist</legend>
-        <p style="margin:.2rem 0 .8rem;font-size:.85rem;color:var(--muted)">
-          Die Mail kommt, sobald der Kurs die Schwelle <strong>unterschreitet</strong>.
-        </p>
-        <div id="assets"></div>
-        <button type="button" id="add">+ Position hinzufügen</button>
-      </fieldset>
-    </div>
-
-    <div class="out">
-      <pre id="json">{}</pre>
+      <pre id="json">…</pre>
+      <p id="err" class="err"></p>
       <div class="actions">
         <button type="button" class="primary" id="copy">config.json kopieren</button>
-        <a href="https://github.com/Suess3/stock-watch/edit/main/config.json" target="_blank" rel="noopener">
-          <button type="button">Im GitHub-Editor öffnen</button>
-        </a>
-        <span id="copied">kopiert</span>
+        <a href="https://github.com/Suess3/stock-watch/edit/main/config.json" target="_blank" rel="noopener"><button type="button">GitHub-Editor</button></a>
+        <span class="ok" id="ok">kopiert</span>
       </div>
-      <p id="error" class="err"></p>
-      <ol class="steps">
-        <li><code>config.json kopieren</code> klicken</li>
-        <li>Im GitHub-Editor alles markieren (<code>Strg/Cmd + A</code>) und einfügen</li>
-        <li>Grün <code>Commit changes…</code> → <code>Commit changes</code></li>
-        <li>Tab <a href="https://github.com/Suess3/stock-watch/actions/workflows/watcher.yml" target="_blank" rel="noopener">Actions</a>
-            → <code>Run workflow</code>, sonst läuft es von selbst alle 10 Minuten</li>
-      </ol>
-    </div>
+    </form>
   </div>
-</div>
+</main>
 
 <script>
-const START = [
-  { name: "S&P 500", symbol: "^GSPC", threshold: 5000, currency: "USD" },
-  { name: "Vanguard FTSE All-World (VWCE)", symbol: "VWCE.DE", threshold: 100, currency: "EUR" }
-];
-const assetsEl = document.getElementById("assets");
+const REPO = "Suess3/stock-watch";
+const RAW  = `https://raw.githubusercontent.com/${REPO}/main`;
 
-function addAsset(a = { name: "", symbol: "", threshold: "", currency: "EUR" }) {
-  const box = document.createElement("div");
-  box.className = "asset";
-  box.innerHTML = `
-    <div class="asset-head">
-      <strong>Position</strong>
-      <button type="button" class="link remove">entfernen</button>
-    </div>
-    <label>Bezeichnung</label>
-    <input class="a-name" value="${esc(a.name)}" placeholder="z.B. MSCI World">
-    <div class="row">
-      <div>
-        <label>Yahoo-Symbol</label>
-        <input class="a-symbol" value="${esc(a.symbol)}" placeholder="z.B. VWCE.DE">
-      </div>
-      <div>
-        <label>Währung</label>
-        <select class="a-currency">
-          ${["EUR","USD","GBP","CHF"].map(c =>
-            `<option value="${c}"${c === a.currency ? " selected" : ""}>${c}</option>`).join("")}
-        </select>
-      </div>
-    </div>
-    <label>Schwelle (Alarm bei Unterschreitung)</label>
-    <input class="a-threshold" type="number" step="any" value="${esc(a.threshold)}">
-  `;
-  box.querySelector(".remove").addEventListener("click", () => { box.remove(); render(); });
-  box.addEventListener("input", render);
-  box.addEventListener("change", render);
-  assetsEl.appendChild(box);
+const FALLBACK = {
+  smtp: { host: "smtp.gmail.com", port: 465, user: "", password: "", from: "", to: "" },
+  interval_minutes: 10, cooldown_hours: 12, run_until: "", history_minutes: 30,
+  watchlist: [
+    { name: "S&P 500", symbol: "^GSPC", threshold: 5000, currency: "USD" },
+    { name: "Vanguard FTSE All-World (VWCE)", symbol: "VWCE.DE", threshold: 100, currency: "EUR" }
+  ]
+};
+
+let cfg = null, history = {};
+
+const $ = id => document.getElementById(id);
+const fmt = (n, d = 2) => n.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+async function grab(path, fallback) {
+  try {
+    const r = await fetch(`${RAW}/${path}?t=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch { return fallback; }
 }
 
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+/* ---------------- Diagramm ----------------
+   Zwei getrennte Charts statt einer Grafik mit zwei Achsen: die Werte liegen
+   in verschiedenen Waehrungen und Groessenordnungen, eine gemeinsame Achse
+   waere irrefuehrend.                                                        */
+function chart(series, limit, currency) {
+  const W = 640, H = 240, ML = 58, MR = 16, MT = 12, MB = 26;
+  const iw = W - ML - MR, ih = H - MT - MB;
+
+  const xs = series.map(p => new Date(p[0]).getTime());
+  const ys = series.map(p => p[1]);
+  const lo0 = Math.min(...ys, limit), hi0 = Math.max(...ys, limit);
+  const pad = (hi0 - lo0) * 0.12 || Math.abs(hi0 * 0.02) || 1;
+  const lo = lo0 - pad, hi = hi0 + pad;
+  const t0 = Math.min(...xs), t1 = Math.max(...xs);
+
+  const X = t => ML + (t1 === t0 ? iw / 2 : (t - t0) / (t1 - t0) * iw);
+  const Y = v => MT + ih - (v - lo) / (hi - lo) * ih;
+
+  const ticks = 4;
+  let grid = "", labels = "";
+  for (let i = 0; i <= ticks; i++) {
+    const v = lo + (hi - lo) * i / ticks, y = Y(v);
+    grid += `<line x1="${ML}" y1="${y.toFixed(1)}" x2="${W - MR}" y2="${y.toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`;
+    labels += `<text x="${ML - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--muted)" style="font-variant-numeric:tabular-nums">${fmt(v, 0)}</text>`;
+  }
+
+  const dLine = series.map((p, i) => `${i ? "L" : "M"}${X(xs[i]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+  const ly = Y(limit);
+  const dots = series.length <= 40
+    ? series.map((p, i) => `<circle cx="${X(xs[i]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="4" fill="var(--series)" stroke="var(--surface)" stroke-width="2"/>`).join("")
+    : "";
+
+  const dtf = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const xFirst = dtf.format(new Date(t0)), xLast = dtf.format(new Date(t1));
+
+  return `
+  <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" preserveAspectRatio="xMidYMid meet">
+    ${grid}${labels}
+    <line x1="${ML}" y1="${MT + ih}" x2="${W - MR}" y2="${MT + ih}" stroke="var(--axis)" stroke-width="1"/>
+    <line x1="${ML}" y1="${ly.toFixed(1)}" x2="${W - MR}" y2="${ly.toFixed(1)}"
+          stroke="var(--limit)" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="${W - MR}" y="${(ly - 6).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--limit)"
+          style="font-variant-numeric:tabular-nums">Schwelle ${fmt(limit, 0)} ${currency}</text>
+    <path d="${dLine}" fill="none" stroke="var(--series)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}
+    <line class="cross" x1="0" y1="${MT}" x2="0" y2="${MT + ih}" stroke="var(--axis)" stroke-width="1" opacity="0"/>
+    <circle class="cdot" r="5" fill="var(--series)" stroke="var(--surface)" stroke-width="2" opacity="0"/>
+    <text x="${ML}" y="${H - 8}" font-size="10.5" fill="var(--muted)">${xFirst}</text>
+    <text x="${W - MR}" y="${H - 8}" text-anchor="end" font-size="10.5" fill="var(--muted)">${xLast}</text>
+    <rect class="hit" x="${ML}" y="${MT}" width="${iw}" height="${ih}" fill="transparent"/>
+  </svg>`;
 }
 
-function val(id) { return document.getElementById(id).value.trim(); }
+function wireHover(wrap, series, currency) {
+  const svg = wrap.querySelector("svg");
+  if (!svg) return;
+  const hit = svg.querySelector(".hit"), cross = svg.querySelector(".cross"), dot = svg.querySelector(".cdot");
+  const tip = document.createElement("div");
+  tip.className = "tip";
+  wrap.appendChild(tip);
+
+  const dtf = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  function move(ev) {
+    const box = svg.getBoundingClientRect();
+    const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    const vx = (cx - box.left) / box.width * 640;
+    // Naehesten Punkt ueber die Zeitachse bestimmen
+    const ML = 58, iw = 640 - 58 - 16;
+    const xs = series.map(p => new Date(p[0]).getTime());
+    const t0 = Math.min(...xs), t1 = Math.max(...xs);
+    const t = t1 === t0 ? t0 : t0 + (vx - ML) / iw * (t1 - t0);
+    let bi = 0, bd = Infinity;
+    xs.forEach((x, i) => { const d = Math.abs(x - t); if (d < bd) { bd = d; bi = i; } });
+
+    const px = t1 === t0 ? ML + iw / 2 : ML + (xs[bi] - t0) / (t1 - t0) * iw;
+    const ys = series.map(p => p[1]);
+    const lo0 = Math.min(...ys, LIMIT_FOR(svg)), hi0 = Math.max(...ys, LIMIT_FOR(svg));
+    const pad = (hi0 - lo0) * 0.12 || Math.abs(hi0 * 0.02) || 1;
+    const lo = lo0 - pad, hi = hi0 + pad;
+    const py = 12 + (240 - 12 - 26) - (series[bi][1] - lo) / (hi - lo) * (240 - 12 - 26);
+
+    cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("opacity", ".6");
+    dot.setAttribute("cx", px); dot.setAttribute("cy", py); dot.setAttribute("opacity", "1");
+    tip.style.left = (px / 640 * box.width) + "px";
+    tip.style.top  = (py / 240 * box.height) + "px";
+    tip.textContent = `${dtf.format(new Date(xs[bi]))} · ${fmt(series[bi][1])} ${currency}`;
+    tip.style.opacity = "1";
+  }
+  function leave() { cross.setAttribute("opacity", "0"); dot.setAttribute("opacity", "0"); tip.style.opacity = "0"; }
+
+  hit.addEventListener("mousemove", move);
+  hit.addEventListener("touchmove", move, { passive: true });
+  hit.addEventListener("mouseleave", leave);
+  hit.addEventListener("touchend", leave);
+}
+const LIMIT_FOR = svg => svg.__limit ?? 0;
+
+function renderCharts() {
+  const host = $("charts");
+  host.innerHTML = "";
+  cfg.watchlist.forEach(item => {
+    const series = (history[item.symbol] || []).slice().sort((a, b) => new Date(a[0]) - new Date(b[0]));
+    const last = series.length ? series[series.length - 1][1] : null;
+    const diff = last !== null ? (last - item.threshold) / item.threshold * 100 : null;
+
+    const card = document.createElement("section");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-head">
+        <div>
+          <h3>${escape_(item.name)}</h3>
+          <div class="sym">${escape_(item.symbol)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="figure">${last !== null ? fmt(last) : "–"}<span class="unit">${escape_(item.currency || "")}</span></div>
+          <div class="sub">${diff !== null ? `${diff >= 0 ? "+" : ""}${fmt(diff, 2)} % zur Schwelle` : "noch kein Kurs"}</div>
+        </div>
+      </div>`;
+
+    const wrap = document.createElement("div");
+    wrap.className = "chart-wrap";
+    if (series.length >= 2) {
+      wrap.innerHTML = chart(series, item.threshold, item.currency || "");
+      wrap.querySelector("svg").__limit = item.threshold;
+    } else {
+      wrap.innerHTML = `<p class="empty">Noch zu wenig Messpunkte für eine Kurve
+        (${series.length}). Der Workflow ergänzt alle ${cfg.history_minutes || 30} Minuten einen Punkt.</p>`;
+    }
+    card.appendChild(wrap);
+
+    if (series.length) {
+      const det = document.createElement("details");
+      det.className = "table";
+      det.innerHTML = `<summary>Werte als Tabelle (${series.length})</summary>
+        <div class="tscroll"><table><thead><tr><th>Zeitpunkt (UTC)</th><th>Kurs</th></tr></thead><tbody>
+        ${series.slice().reverse().map(p => `<tr><td>${escape_(p[0].replace("T", " ").replace("+00:00", ""))}</td><td>${fmt(p[1])}</td></tr>`).join("")}
+        </tbody></table></div>`;
+      card.appendChild(det);
+    }
+
+    host.appendChild(card);
+    if (series.length >= 2) wireHover(wrap, series, item.currency || "");
+  });
+}
+
+function escape_(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ---------------- Formular ---------------- */
+function renderLimits() {
+  const host = $("limits");
+  host.innerHTML = "";
+  cfg.watchlist.forEach((item, i) => {
+    const d = document.createElement("div");
+    d.innerHTML = `<label for="lim${i}">${escape_(item.name)} <span style="color:var(--muted)">(${escape_(item.currency || "")})</span></label>
+                   <input id="lim${i}" type="number" step="any" value="${item.threshold}">`;
+    host.appendChild(d);
+    d.querySelector("input").addEventListener("input", build);
+  });
+}
+
+function runUntil() {
+  const v = $("dur").value;
+  if (!v) return "";
+  if (v === "custom") return $("until").value || "";
+  const d = new Date();
+  d.setDate(d.getDate() + parseInt(v, 10));
+  return d.toISOString().slice(0, 10);
+}
 
 function build() {
-  const mail = val("mail");
-  const list = [...assetsEl.querySelectorAll(".asset")].map(b => ({
-    name: b.querySelector(".a-name").value.trim(),
-    symbol: b.querySelector(".a-symbol").value.trim(),
-    threshold: parseFloat(b.querySelector(".a-threshold").value),
-    currency: b.querySelector(".a-currency").value
+  const mail = $("mail").value.trim();
+  const list = cfg.watchlist.map((item, i) => ({
+    name: item.name, symbol: item.symbol,
+    threshold: parseFloat($(`lim${i}`).value),
+    currency: item.currency
   }));
 
   const problems = [];
   if (!mail) problems.push("Mailadresse fehlt.");
-  if (!list.length) problems.push("Mindestens eine Position eintragen.");
   list.forEach((it, i) => {
-    if (!it.symbol) problems.push(`Position ${i + 1}: Symbol fehlt.`);
-    if (!Number.isFinite(it.threshold)) problems.push(`Position ${i + 1}: Schwelle ist keine Zahl.`);
+    if (!Number.isFinite(it.threshold)) problems.push(`${it.name}: Schwelle ist keine Zahl.`);
   });
 
-  return {
-    problems,
-    config: {
-      smtp: {
-        host: val("host"),
-        port: parseInt(val("port"), 10) || 465,
-        user: mail,
-        password: "",
-        from: mail,
-        to: mail
-      },
-      interval_minutes: parseInt(val("interval"), 10) || 10,
-      cooldown_hours: parseFloat(val("cooldown")) || 0,
-      watchlist: list.map(it => ({
-        name: it.name || it.symbol,
-        symbol: it.symbol,
-        threshold: Number.isFinite(it.threshold) ? it.threshold : 0,
-        currency: it.currency
-      }))
-    }
+  const out = {
+    smtp: {
+      host: cfg.smtp?.host || "smtp.gmail.com",
+      port: parseInt(cfg.smtp?.port, 10) || 465,
+      user: mail, password: "", from: mail, to: mail
+    },
+    interval_minutes: parseInt($("interval").value, 10) || 10,
+    cooldown_hours: parseFloat($("cooldown").value) || 0,
+    run_until: runUntil(),
+    history_minutes: cfg.history_minutes ?? 30,
+    watchlist: list.map(it => ({
+      name: it.name, symbol: it.symbol,
+      threshold: Number.isFinite(it.threshold) ? it.threshold : 0,
+      currency: it.currency
+    }))
   };
-}
 
-function render() {
-  const { problems, config } = build();
-  document.getElementById("json").textContent = JSON.stringify(config, null, 2);
-  document.getElementById("error").textContent = problems.join(" ");
-  document.getElementById("copy").disabled = problems.length > 0;
-}
+  $("json").textContent = JSON.stringify(out, null, 2);
+  $("err").textContent = problems.join(" ");
+  $("copy").disabled = problems.length > 0;
 
-document.getElementById("add").addEventListener("click", () => { addAsset(); render(); });
-
-document.getElementById("copy").addEventListener("click", async () => {
-  const text = document.getElementById("json").textContent;
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    ta.remove();
+  // Schwellenlinie in den Charts mitziehen
+  const changed = list.some((it, i) => it.threshold !== cfg.watchlist[i].threshold);
+  if (changed && list.every(it => Number.isFinite(it.threshold))) {
+    cfg.watchlist = cfg.watchlist.map((it, i) => ({ ...it, threshold: list[i].threshold }));
+    renderCharts();
   }
-  const tag = document.getElementById("copied");
-  tag.classList.add("show");
-  setTimeout(() => tag.classList.remove("show"), 1400);
+}
+
+$("dur").addEventListener("change", () => {
+  $("dateWrap").hidden = $("dur").value !== "custom";
+  build();
+});
+["mail", "interval", "cooldown", "until"].forEach(id => $(id).addEventListener("input", build));
+
+$("copy").addEventListener("click", async () => {
+  const text = $("json").textContent;
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove();
+  }
+  $("ok").classList.add("show");
+  setTimeout(() => $("ok").classList.remove("show"), 1400);
 });
 
-document.querySelectorAll("#mail, #host, #port, #interval, #cooldown")
-  .forEach(el => el.addEventListener("input", render));
+(async function init() {
+  const [c, s] = await Promise.all([
+    grab("config.json", FALLBACK),
+    grab("state.json", {})
+  ]);
+  cfg = { ...FALLBACK, ...c, smtp: { ...FALLBACK.smtp, ...(c.smtp || {}) } };
+  history = s.__history || {};
 
-START.forEach(addAsset);
-render();
+  $("mail").value = cfg.smtp.to || cfg.smtp.user || "";
+  $("interval").value = cfg.interval_minutes ?? 10;
+  $("cooldown").value = cfg.cooldown_hours ?? 12;
+  if (cfg.run_until) {
+    $("dur").value = "custom";
+    $("dateWrap").hidden = false;
+    $("until").value = String(cfg.run_until).slice(0, 10);
+  }
+
+  const points = Object.values(history).reduce((n, a) => n + a.length, 0);
+  const newest = Object.values(history).flat().map(p => p[0]).sort().pop();
+  $("stamp").textContent = points
+    ? `${points} Messpunkte, zuletzt ${newest.replace("T", " ").replace("+00:00", "")} UTC`
+    : "Noch keine Kursdaten — der Workflow sammelt sie ab dem nächsten Lauf.";
+
+  renderLimits();
+  renderCharts();
+  build();
+})();
 </script>
 </body>
 </html>
