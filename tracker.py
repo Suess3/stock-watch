@@ -303,6 +303,44 @@ def send_mail(cfg: dict, subject: str, body: str) -> None:
             server.send_message(msg)
 
 
+LAST_CHECK_KEY = "__last_check"
+
+
+def timing_block(now: datetime, previous: datetime | None) -> str:
+    """Zeitangaben, mit denen sich die Verzoegerung nachrechnen laesst.
+
+    Das Skript weiss nur, wann es die Unterschreitung gesehen hat - nicht,
+    wann der Kurs tatsaechlich gefallen ist. Deshalb wird das Fenster
+    zwischen vorheriger und jetziger Pruefung ausgewiesen.
+    """
+    lines = ["Zeitlicher Ablauf",
+             f"    Unterschreitung erkannt : {now:%d.%m.%Y %H:%M:%S} UTC"]
+
+    if previous:
+        minutes = (now - previous).total_seconds() / 60
+        lines.append(f"    Vorherige Pruefung      : {previous:%d.%m.%Y %H:%M:%S} UTC"
+                     f" (vor {minutes:.1f} Min.)")
+        lines.append("    -> Der Kurs kann irgendwann in diesem Fenster gefallen sein.")
+    else:
+        lines.append("    Vorherige Pruefung      : keine (erster Lauf)")
+
+    run_id = os.environ.get("GITHUB_RUN_ID")
+    if run_id:
+        server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+        repo = os.environ.get("GITHUB_REPOSITORY", "")
+        lines.append(f"    GitHub-Lauf             : {run_id}")
+        if repo:
+            lines.append(f"      {server}/{repo}/actions/runs/{run_id}")
+        lines.append("      Dort steht, wann der Lauf geplant war und wann er startete -")
+        lines.append("      diese Differenz ist die Verzoegerung durch GitHub.")
+
+    lines.append("")
+    lines.append("Die Kopfzeile 'Date' dieser Mail nennt den Versandzeitpunkt, die")
+    lines.append("Ankunftszeit steht in deinem Postfach. Was dazwischen liegt, ist")
+    lines.append("Laufzeit des Mailversands.")
+    return "\n".join(lines) + "\n"
+
+
 # --------------------------------------------------------------------------- #
 # Hauptlogik
 # --------------------------------------------------------------------------- #
@@ -318,6 +356,18 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
     history_gap = float(cfg.get("history_minutes", 30))
     triggered: list[str] = []
     state_changed = False
+
+    # Zeitpunkt der vorherigen Pruefung merken, bevor er ueberschrieben wird.
+    # Er wird jedes Mal fortgeschrieben, sonst waere das Fenster in der
+    # Alarmmail groesser als die tatsaechliche Luecke.
+    raw_previous = state.get(LAST_CHECK_KEY)
+    try:
+        previous_check = datetime.fromisoformat(raw_previous) if raw_previous else None
+    except (TypeError, ValueError):
+        previous_check = None
+    if not dry_run:
+        state[LAST_CHECK_KEY] = now.isoformat(timespec="seconds")
+        state_changed = True
 
     for item in cfg["watchlist"]:
         symbol = item["symbol"]
@@ -378,8 +428,8 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
             "Hallo,\n\n"
             "folgende Werte liegen unter dem von dir gesetzten Schwellwert:\n\n"
             + "\n\n".join(triggered)
-            + f"\n\nZeitpunkt: {now:%d.%m.%Y %H:%M} UTC\n\n"
-            "Das ist eine automatische Nachricht deines ETF-Watchers.\n"
+            + "\n\n" + timing_block(now, previous_check)
+            + "\nDas ist eine automatische Nachricht deines ETF-Watchers.\n"
             "Keine Anlageberatung - Kursdaten koennen verzoegert oder fehlerhaft sein.\n"
         )
         if dry_run:
