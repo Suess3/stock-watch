@@ -289,15 +289,22 @@ async function grab(path, fallback) {
    Zwei getrennte Charts statt einer Grafik mit zwei Achsen: die Werte liegen
    in verschiedenen Waehrungen und Groessenordnungen, eine gemeinsame Achse
    waere irrefuehrend.                                                        */
+/* Wertebereich der y-Achse. Bewusst nur aus den Kursen, ohne die Schwelle -
+   sonst staucht eine weit entfernte Schwelle die Kurve zur Geraden. */
+function domain(ys) {
+  const lo0 = Math.min(...ys), hi0 = Math.max(...ys);
+  const pad = (hi0 - lo0) * 0.15 || Math.abs(hi0 * 0.02) || 1;
+  return [lo0 - pad, hi0 + pad];
+}
+
 function chart(series, limit, currency) {
   const W = 640, H = 240, ML = 58, MR = 16, MT = 12, MB = 26;
   const iw = W - ML - MR, ih = H - MT - MB;
 
   const xs = series.map(p => new Date(p[0]).getTime());
   const ys = series.map(p => p[1]);
-  const lo0 = Math.min(...ys, limit), hi0 = Math.max(...ys, limit);
-  const pad = (hi0 - lo0) * 0.12 || Math.abs(hi0 * 0.02) || 1;
-  const lo = lo0 - pad, hi = hi0 + pad;
+  const [lo, hi] = domain(ys);
+  const limitVisible = limit >= lo && limit <= hi;
   const t0 = Math.min(...xs), t1 = Math.max(...xs);
 
   const X = t => ML + (t1 === t0 ? iw / 2 : (t - t0) / (t1 - t0) * iw);
@@ -320,14 +327,20 @@ function chart(series, limit, currency) {
   const dtf = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const xFirst = dtf.format(new Date(t0)), xLast = dtf.format(new Date(t1));
 
+  const gap = (Math.min(...ys) - limit) / limit * 100;
+  const limitMark = limitVisible
+    ? `<line x1="${ML}" y1="${ly.toFixed(1)}" x2="${W - MR}" y2="${ly.toFixed(1)}"
+             stroke="var(--limit)" stroke-width="2" stroke-dasharray="5 4"/>
+       <text x="${W - MR}" y="${(ly - 6).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--limit)"
+             style="font-variant-numeric:tabular-nums">Schwelle ${fmt(limit, 0)} ${currency}</text>`
+    : `<text x="${W - MR}" y="${(MT + ih - 5).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--limit)"
+             style="font-variant-numeric:tabular-nums">Schwelle ${fmt(limit, 0)} ${currency} liegt ${fmt(Math.abs(gap), 0)} % ${gap > 0 ? "unter" : "über"} der Skala</text>`;
+
   return `
   <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" preserveAspectRatio="xMidYMid meet">
     ${grid}${labels}
     <line x1="${ML}" y1="${MT + ih}" x2="${W - MR}" y2="${MT + ih}" stroke="var(--axis)" stroke-width="1"/>
-    <line x1="${ML}" y1="${ly.toFixed(1)}" x2="${W - MR}" y2="${ly.toFixed(1)}"
-          stroke="var(--limit)" stroke-width="2" stroke-dasharray="5 4"/>
-    <text x="${W - MR}" y="${(ly - 6).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--limit)"
-          style="font-variant-numeric:tabular-nums">Schwelle ${fmt(limit, 0)} ${currency}</text>
+    ${limitMark}
     <path d="${dLine}" fill="none" stroke="var(--series)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}
     <line class="cross" x1="0" y1="${MT}" x2="0" y2="${MT + ih}" stroke="var(--axis)" stroke-width="1" opacity="0"/>
@@ -361,10 +374,7 @@ function wireHover(wrap, series, currency) {
     xs.forEach((x, i) => { const d = Math.abs(x - t); if (d < bd) { bd = d; bi = i; } });
 
     const px = t1 === t0 ? ML + iw / 2 : ML + (xs[bi] - t0) / (t1 - t0) * iw;
-    const ys = series.map(p => p[1]);
-    const lo0 = Math.min(...ys, LIMIT_FOR(svg)), hi0 = Math.max(...ys, LIMIT_FOR(svg));
-    const pad = (hi0 - lo0) * 0.12 || Math.abs(hi0 * 0.02) || 1;
-    const lo = lo0 - pad, hi = hi0 + pad;
+    const [lo, hi] = domain(series.map(p => p[1]));
     const py = 12 + (240 - 12 - 26) - (series[bi][1] - lo) / (hi - lo) * (240 - 12 - 26);
 
     cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("opacity", ".6");
@@ -381,7 +391,6 @@ function wireHover(wrap, series, currency) {
   hit.addEventListener("mouseleave", leave);
   hit.addEventListener("touchend", leave);
 }
-const LIMIT_FOR = svg => svg.__limit ?? 0;
 
 function renderCharts() {
   const host = $("charts");
@@ -409,7 +418,6 @@ function renderCharts() {
     wrap.className = "chart-wrap";
     if (series.length >= 2) {
       wrap.innerHTML = chart(series, item.threshold, item.currency || "");
-      wrap.querySelector("svg").__limit = item.threshold;
     } else {
       wrap.innerHTML = `<p class="empty">Noch zu wenig Messpunkte für eine Kurve
         (${series.length}). Der Workflow ergänzt alle ${cfg.history_minutes || 30} Minuten einen Punkt.</p>`;
