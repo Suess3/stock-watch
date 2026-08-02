@@ -173,8 +173,15 @@ def record_price(state: dict, symbol: str, price: float, now: datetime,
     """Haengt einen Kurspunkt an, wenn der letzte lang genug her ist."""
     history = state.setdefault(HISTORY_KEY, {})
     series = history.setdefault(symbol, [])
+    value = round(price, 4)
 
     if series:
+        # Ausserhalb der Handelszeiten liefert Yahoo unveraendert den letzten
+        # Schlusskurs. Den erneut zu speichern erzeugt nur eine waagrechte
+        # Linie und einen Commit ohne Informationsgehalt.
+        if series[-1][1] == value:
+            return False
+
         try:
             last = datetime.fromisoformat(series[-1][0])
         except (ValueError, IndexError, TypeError):
@@ -182,7 +189,7 @@ def record_price(state: dict, symbol: str, price: float, now: datetime,
         if last and (now - last) < timedelta(minutes=min_gap_minutes):
             return False
 
-    series.append([now.isoformat(timespec="minutes"), round(price, 4)])
+    series.append([now.isoformat(timespec="minutes"), value])
     del series[:-HISTORY_MAX_POINTS]
     return True
 
