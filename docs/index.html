@@ -183,6 +183,13 @@
   .slider-head .val { font-weight: 700; font-variant-numeric: tabular-nums; font-size: .95rem; }
   .slider-head .val.loss { color: var(--loss); }
   .slider-head .val.gain { color: var(--gain); }
+  .exact { display: inline-flex; align-items: center; gap: .25rem; }
+  .exact input {
+    width: 5.6rem; text-align: right; padding: .2rem .4rem; font-size: .9rem;
+    font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  #dropNum { color: var(--loss); }
+  #riseNum { color: var(--gain); }
   input[type=range] { width: 100%; padding: 0; margin: .35rem 0 .1rem; accent-color: var(--series); }
   input[type=range].loss { accent-color: var(--loss); }
   input[type=range].gain { accent-color: var(--gain); }
@@ -256,18 +263,18 @@
         <div class="slider-row">
           <div class="slider-head">
             <span>▼ Verlust — Alarm ab</span>
-            <span class="val loss" id="dropVal">−1,00 %</span>
+            <span class="exact"><input type="number" id="dropNum" step="0.01" max="0"><span class="val loss">%</span></span>
           </div>
-          <input type="range" class="loss" id="drop">
+          <input type="range" class="loss" id="drop" step="0.01">
           <div class="ends"><span id="dropMin">–</span><span>0 %</span></div>
         </div>
 
         <div class="slider-row">
           <div class="slider-head">
             <span>▲ Zuwachs — Alarm ab</span>
-            <span class="val gain" id="riseVal">+1,00 %</span>
+            <span class="exact"><input type="number" id="riseNum" step="0.01" min="0"><span class="val gain">%</span></span>
           </div>
-          <input type="range" class="gain" id="rise">
+          <input type="range" class="gain" id="rise" step="0.01">
           <div class="ends"><span>0 %</span><span id="riseMax">–</span></div>
         </div>
 
@@ -332,7 +339,7 @@ const FALLBACK = {
   ]
 };
 
-let cfg = null, history = {};
+let cfg = null, history = {}, longTerm = {};
 
 const $ = id => document.getElementById(id);
 const fmt = (n, d = 2) => n.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -384,16 +391,28 @@ function currentChange(series, tage) {
   return alle.length ? alle[alle.length - 1].pct : null;
 }
 
-/* Groesster Verlust und groesster Zuwachs ueber alle beobachteten Werte. */
+/* Reglergrenzen. Bevorzugt aus den langfristigen Extremwerten, die das
+   Skript aus mehreren Jahren Tagesdaten berechnet hat. Die eigene
+   Aufzeichnung umfasst nur Tage bis Wochen und wuerde die Regler viel zu
+   eng begrenzen - man koennte dann keinen Alarm bei -5 % einstellen. */
 function extremes(tage) {
-  let min = 0, max = 0, punkte = 0;
-  Object.values(history).forEach(series => {
-    changeSeries(series.slice().sort((a, b) => new Date(a[0]) - new Date(b[0])), tage)
-      .forEach(({ pct }) => { min = Math.min(min, pct); max = Math.max(max, pct); punkte++; });
+  const store = longTerm.symbols || {};
+  let min = 0, max = 0, quelle = null;
+
+  Object.values(store).forEach(werte => {
+    const paar = werte[String(tage)];
+    if (paar) { min = Math.min(min, paar[0]); max = Math.max(max, paar[1]); quelle = "lang"; }
   });
-  // Immer etwas Spielraum lassen, sonst waere der Regler unbenutzbar,
-  // solange die Historie noch kurz ist.
-  return { min: Math.min(min, -0.5), max: Math.max(max, 0.5), punkte };
+
+  if (!quelle) {   // Rueckfall, solange das Skript sie noch nicht geliefert hat
+    Object.values(history).forEach(series => {
+      changeSeries(series.slice().sort((a, b) => new Date(a[0]) - new Date(b[0])), tage)
+        .forEach(({ pct }) => { min = Math.min(min, pct); max = Math.max(max, pct); });
+    });
+    quelle = "kurz";
+  }
+
+  return { min: Math.min(min, -1), max: Math.max(max, 1), quelle };
 }
 
 /* x-Position eines Messpunkts: gleicher Abstand je Punkt, unabhaengig davon,
@@ -581,28 +600,42 @@ function renderLimits() {
    dabei erhalten, soweit sie in den neuen Bereich passen. */
 function syncSliders() {
   const tage = parseFloat($("chgWin").value);
-  const { min, max, punkte } = extremes(tage);
+  const { min, max, quelle } = extremes(tage);
 
   const drop = $("drop"), rise = $("rise");
   const altDrop = drop.value === "" ? -1 : parseFloat(drop.value);
   const altRise = rise.value === "" ? 1 : parseFloat(rise.value);
 
-  drop.min = min.toFixed(2); drop.max = "0"; drop.step = "0.05";
-  rise.min = "0"; rise.max = max.toFixed(2); rise.step = "0.05";
+  drop.min = min.toFixed(2); drop.max = "0";
+  rise.min = "0"; rise.max = max.toFixed(2);
   drop.value = Math.max(min, Math.min(0, altDrop));
   rise.value = Math.min(max, Math.max(0, altRise));
+  $("dropNum").min = drop.min;
+  $("riseNum").max = rise.max;
 
   $("dropMin").textContent = `${fmt(min, 2)} %`;
   $("riseMax").textContent = `+${fmt(max, 2)} %`;
-  $("extremeHint").textContent = punkte
-    ? `Reglerenden entsprechen den stärksten Bewegungen in ${punkte} ausgewerteten Zeitfenstern.`
-    : "Noch zu wenig Historie für diesen Zeitraum — die Enden sind vorläufig gesetzt.";
+
+  const spanne = { 1: "an einem Tag", 3: "in drei Tagen", 7: "in einer Woche" }[tage] || `in ${tage} Tagen`;
+  $("extremeHint").textContent = quelle === "lang"
+    ? `Die Enden sind die stärksten Bewegungen ${spanne} aus ${longTerm.period || "5y"}`
+      + ` Tagesdaten (berechnet ${(longTerm.computed || "").slice(0, 10)}). Schritt 0,01 %.`
+    : `Noch keine Langzeitwerte vom Watcher — die Enden stammen vorläufig aus der`
+      + ` kurzen eigenen Aufzeichnung und sind daher zu eng.`;
   showSliderValues();
 }
 
-function showSliderValues() {
-  $("dropVal").textContent = `${fmt(parseFloat($("drop").value), 2)} %`;
-  $("riseVal").textContent = `+${fmt(parseFloat($("rise").value), 2)} %`;
+/* Regler und Zahlenfeld zeigen denselben Wert; beide duerfen fuehren. */
+function showSliderValues(von) {
+  if (von !== "num") {
+    $("dropNum").value = parseFloat($("drop").value).toFixed(2);
+    $("riseNum").value = parseFloat($("rise").value).toFixed(2);
+  }
+  if (von !== "range") {
+    const d = parseFloat($("dropNum").value), r = parseFloat($("riseNum").value);
+    if (Number.isFinite(d)) $("drop").value = Math.min(0, Math.max(parseFloat($("drop").min), d));
+    if (Number.isFinite(r)) $("rise").value = Math.max(0, Math.min(parseFloat($("rise").max), r));
+  }
 }
 
 function runUntil() {
@@ -672,7 +705,10 @@ $("dur").addEventListener("change", () => {
 ["mail", "interval", "cooldown", "until"].forEach(id => $(id).addEventListener("input", build));
 
 $("chgWin").addEventListener("change", () => { syncSliders(); renderCharts(); build(); });
-["drop", "rise"].forEach(id => $(id).addEventListener("input", () => { showSliderValues(); build(); }));
+["drop", "rise"].forEach(id =>
+  $(id).addEventListener("input", () => { showSliderValues("range"); build(); }));
+["dropNum", "riseNum"].forEach(id =>
+  $(id).addEventListener("input", () => { showSliderValues("num"); build(); }));
 $("chgOn").addEventListener("change", build);
 
 $("copy").addEventListener("click", async () => {
@@ -757,6 +793,7 @@ async function refresh() {
   const s = await grab("state.json", null);
   if (!s) return;
   history = s.__history || {};
+  longTerm = s.__extremes || longTerm;
   showStamp(false);
   renderCharts();
 }
@@ -768,6 +805,7 @@ async function refresh() {
   ]);
   cfg = { ...FALLBACK, ...c, smtp: { ...FALLBACK.smtp, ...(c.smtp || {}) } };
   history = s.__history || {};
+  longTerm = s.__extremes || {};
 
   $("mail").value = cfg.smtp.to || "";
   $("interval").value = cfg.interval_minutes ?? 10;

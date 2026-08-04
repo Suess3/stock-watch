@@ -332,6 +332,80 @@ def send_mail(cfg: dict, subject: str, body: str) -> None:
 
 LAST_CHECK_KEY = "__last_check"
 
+EXTREMES_KEY = "__extremes"
+EXTREMES_PERIOD = "5y"
+EXTREMES_WINDOWS = (1, 3, 7)
+EXTREMES_REFRESH_DAYS = 30
+
+
+def rolling_extremes(punkte: list, window_days: int) -> tuple:
+    """Groesste und kleinste prozentuale Veraenderung ueber das Fenster."""
+    lo = hi = 0.0
+    j = 0
+    for i in range(len(punkte)):
+        grenze = punkte[i][0] - timedelta(days=window_days)
+        while j + 1 < i and punkte[j + 1][0] <= grenze:
+            j += 1
+        if j < i and punkte[j][0] <= grenze and punkte[j][1]:
+            change = (punkte[i][1] - punkte[j][1]) / punkte[j][1] * 100
+            lo = min(lo, change)
+            hi = max(hi, change)
+    return round(lo, 2), round(hi, 2)
+
+
+def refresh_extremes(state: dict, symbols: list) -> bool:
+    """Ermittelt einmalig aus mehreren Jahren Tagesdaten, wie stark sich die
+    Werte historisch je bewegt haben.
+
+    Die kurze Aufzeichnung in state.json taugt dafuer nicht: zwei Wochen
+    Seitwaerts sagen nichts darueber, was ein Wert an einem schlechten Tag
+    kann - und wuerden die Regler laecherlich eng begrenzen.
+    """
+    store = state.setdefault(EXTREMES_KEY, {})
+    computed = store.get("computed")
+    if computed:
+        try:
+            alter = datetime.now(timezone.utc) - datetime.fromisoformat(computed)
+            if alter < timedelta(days=EXTREMES_REFRESH_DAYS) and \
+               all(s in store.get("symbols", {}) for s in symbols):
+                return False
+        except (TypeError, ValueError):
+            pass
+
+    ergebnis = dict(store.get("symbols", {}))
+    for symbol in symbols:
+        try:
+            hist = yf.Ticker(symbol).history(period=EXTREMES_PERIOD, interval="1d")
+        except Exception as exc:
+            print(f"    -> Extremwerte fuer {symbol} nicht abrufbar ({exc}).")
+            continue
+        if hist is None or hist.empty:
+            print(f"    -> Keine Tagesdaten fuer {symbol}.")
+            continue
+
+        punkte = []
+        for ts, close in hist["Close"].dropna().items():
+            stamp = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=timezone.utc)
+            punkte.append((stamp.astimezone(timezone.utc), float(close)))
+        if len(punkte) < 30:
+            continue
+
+        ergebnis[symbol] = {str(w): list(rolling_extremes(punkte, w)) for w in EXTREMES_WINDOWS}
+        spanne = (punkte[-1][0] - punkte[0][0]).days
+        print(f"    -> Extremwerte {symbol} aus {len(punkte)} Tagen ({spanne} Kalendertage): "
+              + ", ".join(f"{w}T {ergebnis[symbol][str(w)][0]:+.2f}/{ergebnis[symbol][str(w)][1]:+.2f} %"
+                          for w in EXTREMES_WINDOWS))
+
+    if not ergebnis:
+        return False
+
+    store["symbols"] = ergebnis
+    store["computed"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    store["period"] = EXTREMES_PERIOD
+    return True
+
 
 def reference_point(series: list, now: datetime, window_days: float):
     """Aeltester Kurs, der noch innerhalb des Fensters liegt.
@@ -480,6 +554,9 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
         previous_check = None
     if not dry_run:
         state[LAST_CHECK_KEY] = now.isoformat(timespec="seconds")
+        state_changed = True
+
+    if refresh_extremes(state, [i["symbol"] for i in cfg["watchlist"]]):
         state_changed = True
 
     for item in cfg["watchlist"]:
