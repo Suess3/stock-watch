@@ -17,6 +17,8 @@
     --border:       rgba(11,11,11,0.10);
     --series:       #2a78d6;
     --limit:        #d03b3b;
+    --loss:         #d03b3b;
+    --gain:         #0ca30c;
     --hero-bg:      #ffffff;
     --hero-fg:      #000000;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -174,6 +176,29 @@
          padding: .3rem .5rem; border-radius: 5px; white-space: nowrap; transform: translate(-50%, -130%);
          font-variant-numeric: tabular-nums; z-index: 5; }
   .chart-wrap { position: relative; }
+
+  /* ---------- Bewegungsalarm ---------- */
+  .slider-row { margin: .9rem 0 .2rem; }
+  .slider-head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+  .slider-head .val { font-weight: 700; font-variant-numeric: tabular-nums; font-size: .95rem; }
+  .slider-head .val.loss { color: var(--loss); }
+  .slider-head .val.gain { color: var(--gain); }
+  input[type=range] { width: 100%; padding: 0; margin: .35rem 0 .1rem; accent-color: var(--series); }
+  input[type=range].loss { accent-color: var(--loss); }
+  input[type=range].gain { accent-color: var(--gain); }
+  .ends { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted);
+          font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-flex; align-items: center; gap: .25rem;
+    font-size: .78rem; font-weight: 600; font-variant-numeric: tabular-nums;
+    padding: .1rem .45rem; border-radius: 999px; border: 1px solid currentColor;
+  }
+  .badge.loss { color: var(--loss); }
+  .badge.gain { color: var(--gain); }
+  .badge.flat { color: var(--muted); }
+  .toggle { display: flex; align-items: center; gap: .5rem; margin: .2rem 0 .4rem; }
+  .toggle input { width: auto; }
+  .toggle label { margin: 0; font-size: .88rem; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -212,6 +237,42 @@
         <legend>Schwellen</legend>
         <div id="limits"></div>
         <p class="hint">Die Mail kommt, sobald der Kurs den Wert unterschreitet.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Starke Bewegung</legend>
+        <div class="toggle">
+          <input type="checkbox" id="chgOn" checked>
+          <label for="chgOn">Bei starker Veränderung benachrichtigen</label>
+        </div>
+
+        <label for="chgWin">Zeitraum, über den gemessen wird</label>
+        <select id="chgWin">
+          <option value="1">pro Tag</option>
+          <option value="3">pro 3 Tage</option>
+          <option value="7">pro Woche</option>
+        </select>
+
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>▼ Verlust — Alarm ab</span>
+            <span class="val loss" id="dropVal">−1,00 %</span>
+          </div>
+          <input type="range" class="loss" id="drop">
+          <div class="ends"><span id="dropMin">–</span><span>0 %</span></div>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>▲ Zuwachs — Alarm ab</span>
+            <span class="val gain" id="riseVal">+1,00 %</span>
+          </div>
+          <input type="range" class="gain" id="rise">
+          <div class="ends"><span>0 %</span><span id="riseMax">–</span></div>
+        </div>
+
+        <p class="hint" id="extremeHint">Reglerenden entsprechen den stärksten Bewegungen,
+          die in den aufgezeichneten Daten tatsächlich vorkamen.</p>
       </fieldset>
 
       <fieldset>
@@ -264,6 +325,7 @@ const SENDER = "johannes.autobot@gmail.com";
 const FALLBACK = {
   smtp: { host: "smtp.gmail.com", port: 465, user: "", password: "", from: "", to: "" },
   interval_minutes: 10, cooldown_hours: 12, run_until: "", history_minutes: 30,
+  change_alert: { enabled: true, window_days: 1, drop_percent: 1, rise_percent: 1 },
   watchlist: [
     { name: "S&P 500", symbol: "^GSPC", threshold: 5000, currency: "USD" },
     { name: "Vanguard FTSE All-World (VWCE)", symbol: "VWCE.DE", threshold: 100, currency: "EUR" }
@@ -295,6 +357,43 @@ function domain(ys, limit) {
   const lo0 = Math.min(...vals), hi0 = Math.max(...vals);
   const pad = (hi0 - lo0) * 0.08 || Math.abs(hi0 * 0.02) || 1;
   return [lo0 - pad, hi0 + pad];
+}
+
+/* ---------------- Prozentuale Veraenderung ----------------
+   Fuer jeden Messpunkt: Wie viel Prozent liegt er ueber oder unter dem
+   letzten Kurs, der mindestens 'tage' zurueckliegt? Daraus ergeben sich
+   die staerksten je beobachteten Bewegungen - und damit die Reglerenden. */
+function changeSeries(series, tage) {
+  const fenster = tage * 864e5;
+  const ts = series.map(p => new Date(p[0]).getTime());
+  const out = [];
+  let j = 0;
+  for (let i = 0; i < series.length; i++) {
+    const grenze = ts[i] - fenster;
+    while (j + 1 < i && ts[j + 1] <= grenze) j++;
+    if (j < i && ts[j] <= grenze && series[j][1]) {
+      out.push({ t: ts[i], pct: (series[i][1] - series[j][1]) / series[j][1] * 100 });
+    }
+  }
+  return out;
+}
+
+/* Aktuelle Veraenderung: letzter Punkt gegen den Vergleichskurs. */
+function currentChange(series, tage) {
+  const alle = changeSeries(series, tage);
+  return alle.length ? alle[alle.length - 1].pct : null;
+}
+
+/* Groesster Verlust und groesster Zuwachs ueber alle beobachteten Werte. */
+function extremes(tage) {
+  let min = 0, max = 0, punkte = 0;
+  Object.values(history).forEach(series => {
+    changeSeries(series.slice().sort((a, b) => new Date(a[0]) - new Date(b[0])), tage)
+      .forEach(({ pct }) => { min = Math.min(min, pct); max = Math.max(max, pct); punkte++; });
+  });
+  // Immer etwas Spielraum lassen, sonst waere der Regler unbenutzbar,
+  // solange die Historie noch kurz ist.
+  return { min: Math.min(min, -0.5), max: Math.max(max, 0.5), punkte };
 }
 
 /* x-Position eines Messpunkts: gleicher Abstand je Punkt, unabhaengig davon,
@@ -416,6 +515,7 @@ function renderCharts() {
         <div style="text-align:right">
           <div class="figure">${last !== null ? fmt(last) : "–"}<span class="unit">${escape_(item.currency || "")}</span></div>
           <div class="sub">${diff !== null ? `${diff >= 0 ? "+" : ""}${fmt(diff, 2)} % zur Schwelle` : "noch kein Kurs"}</div>
+          <div style="margin-top:.35rem">${changeBadge(series)}</div>
         </div>
       </div>`;
 
@@ -444,6 +544,22 @@ function renderCharts() {
   });
 }
 
+/* Veraenderung im gewaehlten Zeitraum. Pfeil und Text tragen die Aussage,
+   die Farbe verstaerkt sie nur - sonst waere sie fuer Rot-Gruen-Schwaeche
+   und im Ausdruck verloren. */
+function changeBadge(series) {
+  const tage = parseFloat($("chgWin").value || "1");
+  const label = { 1: "24 Std.", 3: "3 Tage", 7: "Woche" }[tage] || `${tage} Tage`;
+  const pct = series.length ? currentChange(series, tage) : null;
+  if (pct === null) {
+    return `<span class="badge flat">– über ${label}</span>`;
+  }
+  const art = pct <= -0.005 ? "loss" : pct >= 0.005 ? "gain" : "flat";
+  const pfeil = art === "loss" ? "▼" : art === "gain" ? "▲" : "■";
+  const vz = pct > 0 ? "+" : "";
+  return `<span class="badge ${art}">${pfeil} ${vz}${fmt(pct, 2)} % über ${label}</span>`;
+}
+
 function escape_(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -459,6 +575,34 @@ function renderLimits() {
     host.appendChild(d);
     d.querySelector("input").addEventListener("input", build);
   });
+}
+
+/* Reglerenden aus den Extremwerten setzen. Die gewaehlten Werte bleiben
+   dabei erhalten, soweit sie in den neuen Bereich passen. */
+function syncSliders() {
+  const tage = parseFloat($("chgWin").value);
+  const { min, max, punkte } = extremes(tage);
+
+  const drop = $("drop"), rise = $("rise");
+  const altDrop = drop.value === "" ? -1 : parseFloat(drop.value);
+  const altRise = rise.value === "" ? 1 : parseFloat(rise.value);
+
+  drop.min = min.toFixed(2); drop.max = "0"; drop.step = "0.05";
+  rise.min = "0"; rise.max = max.toFixed(2); rise.step = "0.05";
+  drop.value = Math.max(min, Math.min(0, altDrop));
+  rise.value = Math.min(max, Math.max(0, altRise));
+
+  $("dropMin").textContent = `${fmt(min, 2)} %`;
+  $("riseMax").textContent = `+${fmt(max, 2)} %`;
+  $("extremeHint").textContent = punkte
+    ? `Reglerenden entsprechen den stärksten Bewegungen in ${punkte} ausgewerteten Zeitfenstern.`
+    : "Noch zu wenig Historie für diesen Zeitraum — die Enden sind vorläufig gesetzt.";
+  showSliderValues();
+}
+
+function showSliderValues() {
+  $("dropVal").textContent = `${fmt(parseFloat($("drop").value), 2)} %`;
+  $("riseVal").textContent = `+${fmt(parseFloat($("rise").value), 2)} %`;
 }
 
 function runUntil() {
@@ -494,6 +638,13 @@ function build() {
     cooldown_hours: parseFloat($("cooldown").value) || 0,
     run_until: runUntil(),
     history_minutes: cfg.history_minutes ?? 30,
+    change_alert: {
+      enabled: $("chgOn").checked,
+      window_days: parseFloat($("chgWin").value),
+      // Beide Werte sind Betraege; das Vorzeichen steckt in der Bedeutung
+      drop_percent: Math.abs(parseFloat($("drop").value)) || 0,
+      rise_percent: Math.abs(parseFloat($("rise").value)) || 0
+    },
     watchlist: list.map(it => ({
       name: it.name, symbol: it.symbol,
       threshold: Number.isFinite(it.threshold) ? it.threshold : 0,
@@ -520,6 +671,10 @@ $("dur").addEventListener("change", () => {
 });
 ["mail", "interval", "cooldown", "until"].forEach(id => $(id).addEventListener("input", build));
 
+$("chgWin").addEventListener("change", () => { syncSliders(); renderCharts(); build(); });
+["drop", "rise"].forEach(id => $(id).addEventListener("input", () => { showSliderValues(); build(); }));
+$("chgOn").addEventListener("change", build);
+
 $("copy").addEventListener("click", async () => {
   const text = $("json").textContent;
   try { await navigator.clipboard.writeText(text); }
@@ -545,6 +700,10 @@ function saveForm() {
       until: $("until").value,
       interval: $("interval").value,
       cooldown: $("cooldown").value,
+      chgOn: $("chgOn").checked,
+      chgWin: $("chgWin").value,
+      drop: $("drop").value,
+      rise: $("rise").value,
       limits: cfg.watchlist.map((it, i) => [it.symbol, $(`lim${i}`)?.value])
     }));
   } catch { /* privater Modus o.ae. - dann eben ohne */ }
@@ -563,6 +722,13 @@ function restoreForm() {
     $("dateWrap").hidden = saved.dur !== "custom";
     if (saved.until) $("until").value = saved.until;
   }
+  if (saved.chgOn !== undefined) $("chgOn").checked = saved.chgOn;
+  if (saved.chgWin) $("chgWin").value = saved.chgWin;
+  syncSliders();   // Reglerenden zum gespeicherten Zeitraum passend setzen
+  if (saved.drop) $("drop").value = saved.drop;
+  if (saved.rise) $("rise").value = saved.rise;
+  showSliderValues();
+
   // Schwellen ueber das Symbol zuordnen, nicht ueber die Position
   (saved.limits || []).forEach(([symbol, value]) => {
     const i = cfg.watchlist.findIndex(it => it.symbol === symbol);
@@ -611,6 +777,14 @@ async function refresh() {
     $("dateWrap").hidden = false;
     $("until").value = String(cfg.run_until).slice(0, 10);
   }
+
+  const chg = cfg.change_alert || {};
+  $("chgOn").checked = chg.enabled !== false;
+  $("chgWin").value = String(chg.window_days ?? 1);
+  syncSliders();
+  if (chg.drop_percent != null) $("drop").value = -Math.abs(chg.drop_percent);
+  if (chg.rise_percent != null) $("rise").value = Math.abs(chg.rise_percent);
+  showSliderValues();
 
   renderLimits();
   const restored = restoreForm();

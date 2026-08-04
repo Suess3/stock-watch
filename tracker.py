@@ -58,6 +58,14 @@ DEFAULT_CONFIG = {
     # Mindestabstand zwischen zwei Punkten der Kurshistorie in state.json.
     # Kleiner Wert = feinere Grafik, aber mehr Commits durch den Workflow.
     "history_minutes": 30,
+    # Zweiter Alarmtyp: nicht ein absoluter Kurs, sondern die Veraenderung
+    # ueber einen Zeitraum. Beide Prozentwerte sind Betraege.
+    "change_alert": {
+        "enabled": True,
+        "window_days": 1,
+        "drop_percent": 1.0,
+        "rise_percent": 1.0,
+    },
     "watchlist": [
         {
             "name": "S&P 500",
@@ -325,6 +333,90 @@ def send_mail(cfg: dict, subject: str, body: str) -> None:
 LAST_CHECK_KEY = "__last_check"
 
 
+def reference_point(series: list, now: datetime, window_days: float):
+    """Aeltester Kurs, der noch innerhalb des Fensters liegt.
+
+    Gesucht ist der letzte Punkt, der mindestens 'window_days' zurueckliegt -
+    an ihm wird die Veraenderung gemessen. Gibt es keinen, reicht die
+    Historie noch nicht weit genug zurueck.
+    """
+    grenze = now - timedelta(days=window_days)
+    aeltere = []
+    for stamp, value in series:
+        try:
+            when = datetime.fromisoformat(stamp)
+        except (TypeError, ValueError):
+            continue
+        if when <= grenze:
+            aeltere.append((when, value))
+    if not aeltere:
+        return None
+    return aeltere[-1]
+
+
+def evaluate_change(state: dict, symbol: str, price: float, now: datetime,
+                    settings: dict, cooldown: timedelta):
+    """Prueft, ob sich der Kurs im Fenster stark bewegt hat.
+
+    Rueckgabe: (meldung_oder_None, zustand_geaendert)
+    """
+    if not settings.get("enabled", True):
+        return None, False
+
+    window = float(settings.get("window_days", 1))
+    drop = abs(float(settings.get("drop_percent", 1.0)))
+    rise = abs(float(settings.get("rise_percent", 1.0)))
+
+    series = state.get(HISTORY_KEY, {}).get(symbol, [])
+    ref = reference_point(series, now, window)
+    if not ref:
+        return None, False
+
+    ref_when, ref_price = ref
+    if not ref_price:
+        return None, False
+
+    change = (price - ref_price) / ref_price * 100
+    if change <= -drop:
+        richtung = "down"
+    elif change >= rise:
+        richtung = "up"
+    else:
+        # Zurueck im normalen Bereich: Sperre aufheben, damit die naechste
+        # Bewegung wieder sofort meldet
+        entry = state.setdefault(symbol, {})
+        if entry.get("change_dir"):
+            entry["change_dir"] = None
+            return None, True
+        return None, False
+
+    entry = state.setdefault(symbol, {})
+    letzte = entry.get("change_last_alert")
+    try:
+        letzte_dt = datetime.fromisoformat(letzte) if letzte else None
+    except (TypeError, ValueError):
+        letzte_dt = None
+
+    neue_richtung = entry.get("change_dir") != richtung
+    ruhe_vorbei = letzte_dt is None or (now - letzte_dt) >= cooldown
+    if not (neue_richtung or ruhe_vorbei):
+        return None, False
+
+    entry["change_dir"] = richtung
+    entry["change_last_alert"] = now.isoformat()
+
+    stunden = (now - ref_when).total_seconds() / 3600
+    wort = "gefallen" if richtung == "down" else "gestiegen"
+    grenzwert = drop if richtung == "down" else rise
+    meldung = (
+        f"    Veraenderung   : {change:+.2f} % (Grenze {'-' if richtung == 'down' else '+'}{grenzwert:.2f} %)\n"
+        f"    Vergleichskurs : {ref_price:,.2f} vom {ref_when:%d.%m.%Y %H:%M} UTC"
+        f" (vor {stunden:.1f} Std.)\n"
+        f"    Der Kurs ist in diesem Zeitraum stark {wort}."
+    )
+    return meldung, True
+
+
 def timing_block(now: datetime, previous: datetime | None) -> str:
     """Zeitangaben, mit denen sich die Verzoegerung nachrechnen laesst.
 
@@ -373,7 +465,9 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
 
     cooldown = timedelta(hours=float(cfg.get("cooldown_hours", 12)))
     history_gap = float(cfg.get("history_minutes", 30))
+    change_cfg = cfg.get("change_alert", {}) or {}
     triggered: list[str] = []
+    moves: list[str] = []
     state_changed = False
 
     # Zeitpunkt der vorherigen Pruefung merken, bevor er ueberschrieben wird.
@@ -405,6 +499,13 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
 
         if record_price(state, symbol, price, now, history_gap):
             state_changed = True
+
+        meldung, geaendert = evaluate_change(state, symbol, price, now, change_cfg, cooldown)
+        if geaendert:
+            state_changed = True
+        if meldung:
+            moves.append(f"- {name} ({symbol})\n"
+                         f"    aktueller Kurs : {price:,.2f} {currency}\n" + meldung)
 
         # Kopie, sonst wuerde die Aenderung unbemerkt bleiben (gleiche Referenz)
         entry = dict(state.get(symbol, {"below": False, "last_alert": None}))
@@ -441,16 +542,28 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
             state[symbol] = entry
             state_changed = True
 
-    if triggered:
-        subject = f"[Kursalarm] {len(triggered)} Wert(e) unter deiner Schwelle"
-        body = (
-            "Hallo,\n\n"
-            "folgende Werte liegen unter dem von dir gesetzten Schwellwert:\n\n"
-            + "\n\n".join(triggered)
-            + "\n\n" + timing_block(now, previous_check)
-            + "\nDas ist eine automatische Nachricht deines ETF-Watchers.\n"
-            "Keine Anlageberatung - Kursdaten koennen verzoegert oder fehlerhaft sein.\n"
-        )
+    if triggered or moves:
+        teile = []
+        if triggered:
+            teile.append(f"{len(triggered)} unter Schwelle")
+        if moves:
+            fenster = float(change_cfg.get("window_days", 1))
+            zeitraum = {1: "Tag", 3: "3 Tage", 7: "Woche"}.get(fenster, f"{fenster:g} Tage")
+            teile.append(f"{len(moves)} starke Bewegung ({zeitraum})")
+        subject = "[Kursalarm] " + ", ".join(teile)
+
+        absaetze = ["Hallo,\n"]
+        if triggered:
+            absaetze.append("folgende Werte liegen unter dem von dir gesetzten Schwellwert:\n\n"
+                            + "\n\n".join(triggered))
+        if moves:
+            absaetze.append("folgende Werte haben sich im gewaehlten Zeitraum stark bewegt:\n\n"
+                            + "\n\n".join(moves))
+        absaetze.append(timing_block(now, previous_check))
+        absaetze.append("Das ist eine automatische Nachricht deines ETF-Watchers.\n"
+                        "Keine Anlageberatung - Kursdaten koennen verzoegert oder fehlerhaft sein.\n")
+        body = "\n".join(absaetze)
+
         if dry_run:
             print("\n[DRY-RUN] Mail waere jetzt rausgegangen:\n" + body)
         else:
