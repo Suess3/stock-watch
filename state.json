@@ -6,7 +6,7 @@
   "^GSPC": {
     "below": false,
     "change_dir": "up",
-    "change_last_alert": "2026-08-04T16:27:10.854605+00:00",
+    "change_last_alert": "2026-08-05T04:29:53.310648+00:00",
     "last_alert": null
   },
   "__backfill_tries": {},
@@ -958,5 +958,5 @@
       ]
     ]
   },
-  "__last_check": "2026-08-05T01:10:21+00:00"
+  "__last_check": "2026-08-05T04:29:53+00:00"
 }
