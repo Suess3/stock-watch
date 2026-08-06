@@ -473,51 +473,94 @@ def evaluate_change(state: dict, symbol: str, price: float, now: datetime,
     geaendert = entry.get("change_dir") != richtung
     entry["change_dir"] = richtung
 
-    stunden = (now - ref_when).total_seconds() / 3600
-    wort = "gefallen" if richtung == "down" else "gestiegen"
-    grenzwert = drop if richtung == "down" else rise
-    meldung = (
-        f"    Veraenderung   : {change:+.2f} % (Grenze {'-' if richtung == 'down' else '+'}{grenzwert:.2f} %)\n"
-        f"    Vergleichskurs : {ref_price:,.2f} vom {ref_when:%d.%m.%Y %H:%M} UTC"
-        f" (vor {stunden:.1f} Std.)\n"
-        f"    Der Kurs ist in diesem Zeitraum stark {wort}."
-    )
-    return meldung, geaendert
+    return {
+        "change": change,
+        "grenze": -drop if richtung == "down" else rise,
+        "ref_price": ref_price,
+        "ref_when": ref_when,
+        "richtung": richtung,
+    }, geaendert
 
 
-def timing_block(now: datetime, previous: datetime | None) -> str:
-    """Zeitangaben, mit denen sich die Verzoegerung nachrechnen laesst.
+def de(wert: float, nachkomma: int = 2) -> str:
+    """Zahl in deutscher Schreibweise: 7.723,55"""
+    text = f"{wert:,.{nachkomma}f}"
+    return text.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
 
-    Das Skript weiss nur, wann es die Unterschreitung gesehen hat - nicht,
-    wann der Kurs tatsaechlich gefallen ist. Deshalb wird das Fenster
-    zwischen vorheriger und jetziger Pruefung ausgewiesen.
+
+def fussnote(now: datetime, previous: datetime | None) -> str:
+    """Knappe Zeitangaben, mit denen sich die Verzoegerung nachrechnen laesst.
+
+    Das Skript weiss nur, wann es die Bewegung gesehen hat - nicht, wann sie
+    eingetreten ist. Der Abstand zur vorherigen Pruefung grenzt das ein.
     """
-    lines = ["Zeitlicher Ablauf",
-             f"    Geprueft um             : {now:%d.%m.%Y %H:%M:%S} UTC"]
-
+    zeilen = [f"Geprüft   {now:%d.%m.%Y %H:%M:%S} UTC"]
     if previous:
-        minutes = (now - previous).total_seconds() / 60
-        lines.append(f"    Vorherige Pruefung      : {previous:%d.%m.%Y %H:%M:%S} UTC"
-                     f" (vor {minutes:.1f} Min.)")
-        lines.append("    -> Die Veraenderung ist irgendwann in diesem Fenster eingetreten.")
-    else:
-        lines.append("    Vorherige Pruefung      : keine (erster Lauf)")
+        minuten = (now - previous).total_seconds() / 60
+        zeilen.append(f"Davor     {previous:%H:%M:%S} UTC — vor {minuten:.0f} Min.")
 
     run_id = os.environ.get("GITHUB_RUN_ID")
-    if run_id:
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if run_id and repo:
         server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
-        repo = os.environ.get("GITHUB_REPOSITORY", "")
-        lines.append(f"    GitHub-Lauf             : {run_id}")
-        if repo:
-            lines.append(f"      {server}/{repo}/actions/runs/{run_id}")
-        lines.append("      Dort steht, wann der Lauf geplant war und wann er startete -")
-        lines.append("      diese Differenz ist die Verzoegerung durch GitHub.")
+        zeilen.append(f"Lauf      {server}/{repo}/actions/runs/{run_id}")
+    return "\n".join(zeilen)
 
-    lines.append("")
-    lines.append("Die Kopfzeile 'Date' dieser Mail nennt den Versandzeitpunkt, die")
-    lines.append("Ankunftszeit steht in deinem Postfach. Was dazwischen liegt, ist")
-    lines.append("Laufzeit des Mailversands.")
-    return "\n".join(lines) + "\n"
+
+def pz(wert: float) -> str:
+    """Prozentwert mit Vorzeichen, deutsche Schreibweise: +5,51 %"""
+    return f"{wert:+.2f}".replace(".", ",") + " %"
+
+
+# Dativ, weil das Wort hinter "binnen" steht
+ZEITRAUM = {1: "24 Stunden", 3: "3 Tagen", 7: "einer Woche"}
+
+
+def baue_mail(triggered: list, moves: list, fenster: float,
+              now: datetime, previous: datetime | None) -> tuple:
+    """Setzt Betreff und Text zusammen."""
+    zeitraum = ZEITRAUM.get(fenster, f"{fenster:g} Tagen")
+
+    kurz = [f"{m['symbol']} {pz(m['change'])}" for m in moves]
+    kurz += [f"{t['symbol']} unter {de(t['threshold'], 0)}" for t in triggered]
+
+    if len(kurz) == 1:
+        betreff = kurz[0] + (f" binnen {zeitraum}" if moves else "")
+    elif len(kurz) == 2:
+        betreff = " · ".join(kurz)
+    else:
+        betreff = f"{len(kurz)} Meldungen · " + " · ".join(kurz[:2]) + " …"
+    betreff = "[stock-watch] " + betreff
+
+    teile = []
+
+    if moves:
+        block = [f"STARKE BEWEGUNG binnen {zeitraum}", ""]
+        for m in moves:
+            block.append(f"  {m['name']} ({m['symbol']})")
+            block.append(f"    Kurs         {de(m['price'])} {m['currency']}")
+            block.append(f"    Veränderung  {pz(m['change']):<12}"
+                         f" Grenze {pz(m['grenze'])}")
+            block.append(f"    Vergleich    {de(m['ref_price'])} {m['currency']}"
+                         f" am {m['ref_when']:%d.%m. %H:%M} UTC")
+            block.append("")
+        teile.append("\n".join(block).rstrip())
+
+    if triggered:
+        block = ["UNTER SCHWELLE", ""]
+        for t in triggered:
+            block.append(f"  {t['name']} ({t['symbol']})")
+            block.append(f"    Kurs         {de(t['price'])} {t['currency']}")
+            block.append(f"    Schwelle     {de(t['threshold'])} {t['currency']}"
+                         f"       {pz(t['diff'])}")
+            block.append("")
+        teile.append("\n".join(block).rstrip())
+
+    teile.append("—" * 46)
+    teile.append(fussnote(now, previous))
+    teile.append("Automatisch erzeugt · keine Anlageberatung ·"
+                 " Kursdaten können verzögert sein.")
+    return betreff, "\n\n".join(teile) + "\n"
 
 
 # --------------------------------------------------------------------------- #
@@ -571,12 +614,12 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
         if record_price(state, symbol, price, now, history_gap):
             state_changed = True
 
-        meldung, geaendert = evaluate_change(state, symbol, price, now, change_cfg)
+        bewegung, geaendert = evaluate_change(state, symbol, price, now, change_cfg)
         if geaendert:
             state_changed = True
-        if meldung:
-            moves.append(f"- {name} ({symbol})\n"
-                         f"    aktueller Kurs : {price:,.2f} {currency}\n" + meldung)
+        if bewegung:
+            moves.append({**bewegung, "name": name, "symbol": symbol,
+                          "price": price, "currency": currency})
 
         # Kopie, sonst wuerde die Aenderung unbemerkt bleiben (gleiche Referenz)
         entry = dict(state.get(symbol, {"below": False, "last_alert": None}))
@@ -596,12 +639,9 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
             cooldown_over = last_dt is None or (now - last_dt) >= cooldown
 
             if fresh_cross or cooldown_over:
-                triggered.append(
-                    f"- {name} ({symbol})\n"
-                    f"    aktueller Kurs : {price:,.2f} {currency}\n"
-                    f"    Schwellwert    : {threshold:,.2f} {currency}\n"
-                    f"    Abweichung     : {diff_pct:+.2f} %"
-                )
+                triggered.append({"name": name, "symbol": symbol, "price": price,
+                                  "currency": currency, "threshold": threshold,
+                                  "diff": diff_pct})
                 entry["last_alert"] = now.isoformat()
             entry["below"] = True
         else:
@@ -636,26 +676,9 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
             state_changed = True
 
     if triggered or moves:
-        teile = []
-        if triggered:
-            teile.append(f"{len(triggered)} unter Schwelle")
-        if moves:
-            fenster = float(change_cfg.get("window_days", 1))
-            zeitraum = {1: "Tag", 3: "3 Tage", 7: "Woche"}.get(fenster, f"{fenster:g} Tage")
-            teile.append(f"{len(moves)} starke Bewegung ({zeitraum})")
-        subject = "[Kursalarm] " + ", ".join(teile)
-
-        absaetze = ["Hallo,\n"]
-        if triggered:
-            absaetze.append("folgende Werte liegen unter dem von dir gesetzten Schwellwert:\n\n"
-                            + "\n\n".join(triggered))
-        if moves:
-            absaetze.append("folgende Werte haben sich im gewaehlten Zeitraum stark bewegt:\n\n"
-                            + "\n\n".join(moves))
-        absaetze.append(timing_block(now, previous_check))
-        absaetze.append("Das ist eine automatische Nachricht deines ETF-Watchers.\n"
-                        "Keine Anlageberatung - Kursdaten koennen verzoegert oder fehlerhaft sein.\n")
-        body = "\n".join(absaetze)
+        subject, body = baue_mail(triggered, moves,
+                                  float(change_cfg.get("window_days", 1)),
+                                  now, previous_check)
 
         if dry_run:
             print("\n[DRY-RUN] Mail waere jetzt rausgegangen:\n" + body)
