@@ -331,6 +331,7 @@ def send_mail(cfg: dict, subject: str, body: str) -> None:
 
 
 LAST_CHECK_KEY = "__last_check"
+CHANGE_MAIL_KEY = "__change_last_mail"
 
 EXTREMES_KEY = "__extremes"
 EXTREMES_PERIOD = "5y"
@@ -429,8 +430,12 @@ def reference_point(series: list, now: datetime, window_days: float):
 
 
 def evaluate_change(state: dict, symbol: str, price: float, now: datetime,
-                    settings: dict, cooldown: timedelta):
+                    settings: dict):
     """Prueft, ob sich der Kurs im Fenster stark bewegt hat.
+
+    Wie oft daraus eine Mail wird, entscheidet nicht diese Funktion, sondern
+    die Sperre in check_once - sonst meldet eine Bewegung, die tagelang
+    bestehen bleibt, bei jedem Lauf erneut.
 
     Rueckgabe: (meldung_oder_None, zustand_geaendert)
     """
@@ -465,19 +470,8 @@ def evaluate_change(state: dict, symbol: str, price: float, now: datetime,
         return None, False
 
     entry = state.setdefault(symbol, {})
-    letzte = entry.get("change_last_alert")
-    try:
-        letzte_dt = datetime.fromisoformat(letzte) if letzte else None
-    except (TypeError, ValueError):
-        letzte_dt = None
-
-    neue_richtung = entry.get("change_dir") != richtung
-    ruhe_vorbei = letzte_dt is None or (now - letzte_dt) >= cooldown
-    if not (neue_richtung or ruhe_vorbei):
-        return None, False
-
+    geaendert = entry.get("change_dir") != richtung
     entry["change_dir"] = richtung
-    entry["change_last_alert"] = now.isoformat()
 
     stunden = (now - ref_when).total_seconds() / 3600
     wort = "gefallen" if richtung == "down" else "gestiegen"
@@ -488,7 +482,7 @@ def evaluate_change(state: dict, symbol: str, price: float, now: datetime,
         f" (vor {stunden:.1f} Std.)\n"
         f"    Der Kurs ist in diesem Zeitraum stark {wort}."
     )
-    return meldung, True
+    return meldung, geaendert
 
 
 def timing_block(now: datetime, previous: datetime | None) -> str:
@@ -499,13 +493,13 @@ def timing_block(now: datetime, previous: datetime | None) -> str:
     zwischen vorheriger und jetziger Pruefung ausgewiesen.
     """
     lines = ["Zeitlicher Ablauf",
-             f"    Unterschreitung erkannt : {now:%d.%m.%Y %H:%M:%S} UTC"]
+             f"    Geprueft um             : {now:%d.%m.%Y %H:%M:%S} UTC"]
 
     if previous:
         minutes = (now - previous).total_seconds() / 60
         lines.append(f"    Vorherige Pruefung      : {previous:%d.%m.%Y %H:%M:%S} UTC"
                      f" (vor {minutes:.1f} Min.)")
-        lines.append("    -> Der Kurs kann irgendwann in diesem Fenster gefallen sein.")
+        lines.append("    -> Die Veraenderung ist irgendwann in diesem Fenster eingetreten.")
     else:
         lines.append("    Vorherige Pruefung      : keine (erster Lauf)")
 
@@ -577,7 +571,7 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
         if record_price(state, symbol, price, now, history_gap):
             state_changed = True
 
-        meldung, geaendert = evaluate_change(state, symbol, price, now, change_cfg, cooldown)
+        meldung, geaendert = evaluate_change(state, symbol, price, now, change_cfg)
         if geaendert:
             state_changed = True
         if meldung:
@@ -617,6 +611,28 @@ def check_once(cfg: dict, dry_run: bool = False) -> int:
 
         if state.get(symbol) != entry:
             state[symbol] = entry
+            state_changed = True
+
+    # Eine Bewegung ueber ein Wochenfenster besteht tagelang fort. Ohne diese
+    # Sperre meldet sie bei jedem Lauf erneut - bei 12 Stunden Ruhezeit waren
+    # das bis zu vierzehn Mails pro Woche und Wert. Es geht hoechstens eine
+    # Bewegungsmail je Fenster raus, egal wie viele Werte betroffen sind.
+    if moves:
+        fenster_tage = float(change_cfg.get("window_days", 1))
+        sperre = timedelta(days=fenster_tage)
+        raw_letzte = state.get(CHANGE_MAIL_KEY)
+        try:
+            letzte_mail = datetime.fromisoformat(raw_letzte) if raw_letzte else None
+        except (TypeError, ValueError):
+            letzte_mail = None
+
+        if letzte_mail and (now - letzte_mail) < sperre:
+            rest = sperre - (now - letzte_mail)
+            print(f"    -> {len(moves)} Bewegungsmeldung(en) unterdrueckt,"
+                  f" naechste Mail fruehestens in {rest.total_seconds() / 3600:.1f} Std.")
+            moves = []
+        elif not dry_run:
+            state[CHANGE_MAIL_KEY] = now.isoformat(timespec="seconds")
             state_changed = True
 
     if triggered or moves:
