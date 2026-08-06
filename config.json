@@ -9,13 +9,13 @@
   },
   "interval_minutes": 20,
   "cooldown_hours": 12,
-  "run_until": "2026-08-11",
+  "run_until": "2026-08-13",
   "history_minutes": 30,
   "change_alert": {
     "enabled": true,
-    "window_days": 7,
-    "drop_percent": 2.39,
-    "rise_percent": 3.4
+    "window_days": 1,
+    "drop_percent": 1,
+    "rise_percent": 1
   },
   "watchlist": [
     {
