@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-09-04T11:55:14+00:00",
+  "updated_at": "2026-09-04T22:33:34+00:00",
   "prediction": {
     "session": "2026-09-04",
-    "status": "forecast",
+    "status": "evaluated",
     "close_return_pct": -0.2722,
     "expected_close": 7726.6205,
     "uncertainty_pct": 0.85,
@@ -39,7 +39,73 @@
       }
     ]
   },
-  "latest_evaluation": null,
-  "metrics": null,
-  "note": "2026-09-04: Tagesprognose vor US-Eröffnung veröffentlicht."
+  "latest_evaluation": {
+    "session": "2026-09-04",
+    "path": [
+      {
+        "lower_pct": -0.4675,
+        "return_pct": 0.0,
+        "time": "15:30",
+        "upper_pct": 0.4675
+      },
+      {
+        "lower_pct": -0.6443,
+        "return_pct": -0.0735,
+        "time": "17:00",
+        "upper_pct": 0.4973
+      },
+      {
+        "lower_pct": -0.8145,
+        "return_pct": -0.1443,
+        "time": "18:30",
+        "upper_pct": 0.526
+      },
+      {
+        "lower_pct": -0.9782,
+        "return_pct": -0.2123,
+        "time": "20:00",
+        "upper_pct": 0.5535
+      },
+      {
+        "lower_pct": -1.1222,
+        "return_pct": -0.2722,
+        "time": "22:00",
+        "upper_pct": 0.5778
+      }
+    ],
+    "actual_path": [
+      {
+        "return_pct": -0.0497,
+        "time": "15:30"
+      },
+      {
+        "return_pct": -0.4565,
+        "time": "17:00"
+      },
+      {
+        "return_pct": -0.298,
+        "time": "18:30"
+      },
+      {
+        "return_pct": -0.4299,
+        "time": "20:00"
+      },
+      {
+        "return_pct": -0.3757,
+        "time": "22:00"
+      }
+    ],
+    "actual_return_pct": -0.3757,
+    "close_error_pct": -0.1035,
+    "absolute_close_error_pct": 0.1035,
+    "direction_correct": true
+  },
+  "metrics": {
+    "days": 1,
+    "model_mae_pct": 0.103,
+    "zero_baseline_mae_pct": 0.376,
+    "futures_baseline_mae_pct": 0.376,
+    "direction_accuracy_pct": 100
+  },
+  "note": "2026-09-04: Prognose nach Handelsschluss ausgewertet. Modellparameter wurden intern anhand des Fehlers aktualisiert."
 }
