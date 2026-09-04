@@ -1,7 +1,45 @@
 {
-  "updated_at": null,
-  "prediction": null,
+  "updated_at": "2026-09-04T11:55:14+00:00",
+  "prediction": {
+    "session": "2026-09-04",
+    "status": "forecast",
+    "close_return_pct": -0.2722,
+    "expected_close": 7726.6205,
+    "uncertainty_pct": 0.85,
+    "path": [
+      {
+        "lower_pct": -0.4675,
+        "return_pct": 0.0,
+        "time": "15:30",
+        "upper_pct": 0.4675
+      },
+      {
+        "lower_pct": -0.6443,
+        "return_pct": -0.0735,
+        "time": "17:00",
+        "upper_pct": 0.4973
+      },
+      {
+        "lower_pct": -0.8145,
+        "return_pct": -0.1443,
+        "time": "18:30",
+        "upper_pct": 0.526
+      },
+      {
+        "lower_pct": -0.9782,
+        "return_pct": -0.2123,
+        "time": "20:00",
+        "upper_pct": 0.5535
+      },
+      {
+        "lower_pct": -1.1222,
+        "return_pct": -0.2722,
+        "time": "22:00",
+        "upper_pct": 0.5778
+      }
+    ]
+  },
   "latest_evaluation": null,
   "metrics": null,
-  "note": "Noch keine veröffentlichte Tagesprognose."
+  "note": "2026-09-04: Tagesprognose vor US-Eröffnung veröffentlicht."
 }
