@@ -1,0 +1,34 @@
+{
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 465,
+    "user": "johannes.autobot@gmail.com",
+    "password": "",
+    "from": "johannes.autobot@gmail.com",
+    "to": "johannes.su3@gmail.com"
+  },
+  "interval_minutes": 20,
+  "cooldown_hours": 12,
+  "run_until": "2026-11-30",
+  "history_minutes": 30,
+  "change_alert": {
+    "enabled": true,
+    "window_days": 1,
+    "drop_percent": 1,
+    "rise_percent": 1
+  },
+  "watchlist": [
+    {
+      "name": "S&P 500",
+      "symbol": "^GSPC",
+      "threshold": 7600,
+      "currency": "USD"
+    },
+    {
+      "name": "Vanguard FTSE All-World (VWCE)",
+      "symbol": "VWCE.DE",
+      "threshold": 165,
+      "currency": "EUR"
+    }
+  ]
+}

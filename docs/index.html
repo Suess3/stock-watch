@@ -5,18 +5,844 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>stock-watch</title>
 <style>
-  :root { color-scheme:light; --plane:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.1); --blue:#2a78d6; --green:#0ca30c; --red:#d03b3b; }
-  @media (prefers-color-scheme:dark) { :root { color-scheme:dark; --plane:#0d0d0d; --surface:#1a1a19; --ink:#fff; --ink2:#c3c2b7; --muted:#898781; --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.1); --blue:#3987e5; --green:#35c535; } }
-  * { box-sizing:border-box; } body { margin:0; background:var(--plane); color:var(--ink); font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }.hero { min-height:49svh; background:#fff; color:#000; display:grid; place-items:center; text-align:center; padding:2rem; }.hero h1 { margin:0; font-size:clamp(3rem,14vw,14rem); letter-spacing:-.06em; line-height:.85; }.hero p { margin:1.3rem 0 0; text-transform:uppercase; letter-spacing:.18em; font-size:clamp(.72rem,1.6vw,1rem); opacity:.55; }.board { max-width:1080px; margin:auto; padding:4rem 1.25rem 5rem; }.board h2 { margin:0; font-size:1.35rem; }.stamp { margin:.25rem 0 2rem; color:var(--ink2); font-size:.92rem; }.note { border-left:3px solid var(--blue); background:var(--surface); color:var(--ink2); padding:.75rem .95rem; border-radius:0 7px 7px 0; font-size:.88rem; }.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1.25rem; margin-top:1.25rem; }.wide { grid-column:1/-1; } @media(max-width:700px) { .grid { grid-template-columns:1fr; }.wide { grid-column:auto; } }.card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.1rem 1.2rem; }.card h3 { margin:0; font-size:1rem; }.head { display:flex; align-items:start; justify-content:space-between; gap:1rem; }.figure { font-size:2.15rem; line-height:1.05; font-weight:750; letter-spacing:-.035em; text-align:right; font-variant-numeric:tabular-nums; }.gain { color:var(--green); }.loss { color:var(--red); }.sub { color:var(--ink2); font-size:.8rem; text-align:right; }.metrics { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; margin-top:1rem; padding-top:.9rem; border-top:1px solid var(--grid); }.metric b { display:block; font-variant-numeric:tabular-nums; }.metric span { display:block; color:var(--muted); font-size:.74rem; }.legend { display:flex; gap:1rem; flex-wrap:wrap; margin:.8rem 0 -.35rem; color:var(--ink2); font-size:.78rem; }.key { width:1rem; height:.18rem; display:inline-block; background:var(--blue); margin-right:.25rem; vertical-align:middle; }.key.real { background:var(--ink); }.key.band { height:.6rem; opacity:.2; }.empty { color:var(--muted); text-align:center; padding:2rem 0; } svg { display:block; width:100%; margin-top:.8rem; }
+  :root {
+    color-scheme: light;
+    --plane:        #f9f9f7;
+    --surface:      #fcfcfb;
+    --ink:          #0b0b0b;
+    --ink-2:        #52514e;
+    --muted:        #898781;
+    --grid:         #e1e0d9;
+    --axis:         #c3c2b7;
+    --border:       rgba(11,11,11,0.10);
+    --series:       #2a78d6;
+    --limit:        #d03b3b;
+    --loss:         #d03b3b;
+    --gain:         #0ca30c;
+    --hero-bg:      #ffffff;
+    --hero-fg:      #000000;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane:      #0d0d0d;
+      --surface:    #1a1a19;
+      --ink:        #ffffff;
+      --ink-2:      #c3c2b7;
+      --muted:      #898781;
+      --grid:       #2c2c2a;
+      --axis:       #383835;
+      --border:     rgba(255,255,255,0.10);
+      --series:     #3987e5;
+      --limit:      #d03b3b;
+      /* Der Titel bleibt bewusst in beiden Modi schwarz auf weiss. */
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane: #0d0d0d; --surface: #1a1a19; --ink: #fff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+    --border: rgba(255,255,255,0.10); --series: #3987e5; --limit: #d03b3b;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--plane);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+  }
+
+  /* ---------- Titelseite ---------- */
+  .hero {
+    height: 100vh;
+    height: 100svh;
+    background: var(--hero-bg);
+    color: var(--hero-fg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 0 2vw;
+  }
+  .hero h1 {
+    margin: 0;
+    font-size: clamp(2.2rem, 14vw, 17rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: .9;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .hero p {
+    margin: 1.5rem 0 0;
+    font-size: clamp(.8rem, 1.6vw, 1.05rem);
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    opacity: .55;
+  }
+  .scroll-hint {
+    position: absolute;
+    bottom: 2.5rem;
+    color: inherit;
+    text-decoration: none;
+    opacity: .5;
+    font-size: 2rem;
+    line-height: 1;
+    animation: bob 2s ease-in-out infinite;
+  }
+  .page-link {
+    position: absolute; top: 1.25rem; right: 1.25rem;
+    color: inherit; text-decoration: none; border: 1px solid currentColor;
+    border-radius: 999px; padding: .42rem .78rem; font-size: .82rem; font-weight: 600;
+  }
+  .page-link:hover { background: #000; color: #fff; }
+  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(7px); } }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .scroll-hint { animation: none; }
+  }
+
+  /* ---------- Dashboard ---------- */
+  .board { max-width: 1240px; margin: 0 auto; padding: 4rem 1.25rem 5rem; }
+  .board > header { margin-bottom: 2rem; }
+  .board h2 { font-size: 1.35rem; margin: 0 0 .25rem; }
+  .board header p { margin: 0; color: var(--ink-2); font-size: .95rem; }
+
+  .split { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(0,1fr); gap: 1.5rem; align-items: start; }
+  @media (max-width: 940px) { .split { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.1rem 1.2rem 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  .card-head h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+  .card-head .sym { color: var(--muted); font-size: .8rem; font-family: var(--mono); }
+  .figure { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+  .figure .unit { font-size: .95rem; font-weight: 500; color: var(--ink-2); margin-left: .2rem; }
+  .sub { font-size: .82rem; color: var(--ink-2); margin-top: .1rem; }
+  svg.chart { display: block; width: 100%; height: auto; margin-top: .9rem; touch-action: pan-y; }
+  .empty { color: var(--muted); font-size: .87rem; padding: 2rem 0 1rem; text-align: center; }
+
+  details.table { margin-top: .5rem; }
+  details.table summary { cursor: pointer; font-size: .82rem; color: var(--ink-2); }
+  table { border-collapse: collapse; width: 100%; margin-top: .5rem; font-size: .8rem; }
+  th, td { text-align: right; padding: .25rem .5rem; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; }
+  .tscroll { max-height: 220px; overflow: auto; }
+
+  /* ---------- Formular ---------- */
+  form fieldset { border: 1px solid var(--border); border-radius: 8px; padding: .9rem 1rem 1rem; margin: 0 0 1rem; background: var(--surface); }
+  form legend { font-weight: 600; font-size: .9rem; padding: 0 .35rem; }
+  label { display: block; font-size: .8rem; color: var(--ink-2); margin: .65rem 0 .2rem; }
+  input, select {
+    width: 100%; padding: .45rem .6rem; font: inherit; font-size: .92rem;
+    border: 1px solid var(--axis); border-radius: 6px;
+    background: var(--plane); color: var(--ink);
+  }
+  input:focus, select:focus { outline: 2px solid var(--series); outline-offset: -1px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+  .hint { font-size: .76rem; color: var(--muted); margin: .3rem 0 0; }
+  button {
+    font: inherit; padding: .5rem 1rem; border-radius: 6px;
+    border: 1px solid var(--axis); background: var(--plane); color: var(--ink); cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--series); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary { background: var(--series); border-color: var(--series); color: #fff; font-weight: 600; }
+  .actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-top: .9rem; }
+  pre#json {
+    margin: .9rem 0 0; padding: .9rem; background: var(--plane);
+    border: 1px solid var(--border); border-radius: 8px;
+    font-family: var(--mono); font-size: .76rem;
+    max-height: 300px; overflow: auto;
+  }
+  .note {
+    border-left: 3px solid var(--limit); background: var(--surface);
+    padding: .7rem .9rem; border-radius: 0 6px 6px 0; font-size: .83rem;
+    color: var(--ink-2); margin: 0 0 1.25rem;
+  }
+  .ok { color: #006300; font-size: .82rem; opacity: 0; transition: opacity .15s; }
+  @media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) .ok { color: #0ca30c; } }
+  .ok.show { opacity: 1; }
+  .err { color: var(--limit); font-size: .82rem; margin: .5rem 0 0; }
+  a { color: var(--series); }
+  code { font-family: var(--mono); font-size: .93em; }
+  .tip { position: absolute; pointer-events: none; opacity: 0; transition: opacity .1s;
+         background: var(--ink); color: var(--surface); font-size: .76rem;
+         padding: .3rem .5rem; border-radius: 5px; white-space: nowrap; transform: translate(-50%, -130%);
+         font-variant-numeric: tabular-nums; z-index: 5; }
+  .chart-wrap { position: relative; }
+
+  /* ---------- Bewegungsalarm ---------- */
+  .slider-row { margin: .9rem 0 .2rem; }
+  .slider-head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+  .slider-head .val { font-weight: 700; font-variant-numeric: tabular-nums; font-size: .95rem; }
+  .slider-head .val.loss { color: var(--loss); }
+  .slider-head .val.gain { color: var(--gain); }
+  .exact { display: inline-flex; align-items: center; gap: .25rem; }
+  .exact input {
+    width: 5.6rem; text-align: right; padding: .2rem .4rem; font-size: .9rem;
+    font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  #dropNum { color: var(--loss); }
+  #riseNum { color: var(--gain); }
+  input[type=range] { width: 100%; padding: 0; margin: .35rem 0 .1rem; accent-color: var(--series); }
+  input[type=range].loss { accent-color: var(--loss); }
+  input[type=range].gain { accent-color: var(--gain); }
+  .ends { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted);
+          font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-flex; align-items: center; gap: .25rem;
+    font-size: .78rem; font-weight: 600; font-variant-numeric: tabular-nums;
+    padding: .1rem .45rem; border-radius: 999px; border: 1px solid currentColor;
+  }
+  .badge.loss { color: var(--loss); }
+  .badge.gain { color: var(--gain); }
+  .badge.flat { color: var(--muted); }
+  .toggle { display: flex; align-items: center; gap: .5rem; margin: .2rem 0 .4rem; }
+  .toggle input { width: auto; }
+  .toggle label { margin: 0; font-size: .88rem; color: var(--ink); }
 </style>
 </head>
 <body>
-<section class="hero"><div><h1>stock-watch</h1><p>S&P 500 · täglicher Prognosemonitor</p></div></section>
-<main class="board"><h2>Prognose und Realität</h2><p class="stamp" id="stamp">Öffentliche Ergebnisdaten werden geladen …</p><p class="note">Dieses Dashboard zeigt ausschließlich veröffentlichte Ergebnisse: Prognose, tatsächlichen Verlauf und eine kurze Tagesnotiz. Modell, Rohdaten und Forschung bleiben privat.</p><div class="grid" id="content"></div></main>
+
+<section class="hero">
+  <a class="page-link" href="predict.html">Predict →</a>
+  <h1>stock-watch</h1>
+  <p>Kursalarm per Mail</p>
+  <a class="scroll-hint" href="#board" aria-label="Nach unten scrollen">&darr;</a>
+</section>
+
+<main class="board" id="board">
+  <header>
+    <h2>Kurse und Einstellungen</h2>
+    <p id="stamp">Daten werden geladen …</p>
+  </header>
+
+  <p class="note">
+    <strong>Wirksam erst nach dem Commit.</strong> Der Alarm richtet sich nach der
+    <code>config.json</code> im Repo — hier geänderte Werte gelten erst, wenn du die Datei
+    dort ersetzt hast. Diese Seite kann nichts ins Repo schreiben.
+  </p>
+
+  <div class="split">
+    <div id="charts"></div>
+
+    <form id="cfg" autocomplete="off">
+      <fieldset>
+        <legend>Mail</legend>
+        <label for="mail">Empfänger — hierhin geht der Alarm</label>
+        <input id="mail" type="email" placeholder="dein.name@gmail.com">
+        <p class="hint">Beliebige Adresse, kein Passwort nötig. Verschickt wird über ein festes
+           Bot-Konto. Bei GitHub Actions gewinnt das Secret <code>MAIL_TO</code> über dieses Feld.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Schwellen</legend>
+        <div id="limits"></div>
+        <p class="hint">Die Mail kommt, sobald der Kurs den Wert unterschreitet.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Starke Bewegung</legend>
+        <div class="toggle">
+          <input type="checkbox" id="chgOn" checked>
+          <label for="chgOn">Bei starker Veränderung benachrichtigen</label>
+        </div>
+
+        <label for="chgWin">Zeitraum, über den gemessen wird</label>
+        <select id="chgWin">
+          <option value="1">pro Tag</option>
+          <option value="3">pro 3 Tage</option>
+          <option value="7">pro Woche</option>
+        </select>
+
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>▼ Verlust — Alarm ab</span>
+            <span class="exact"><input type="number" id="dropNum" step="0.01" max="0"><span class="val loss">%</span></span>
+          </div>
+          <input type="range" class="loss" id="drop" step="0.01">
+          <div class="ends"><span id="dropMin">–</span><span>0 %</span></div>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>▲ Zuwachs — Alarm ab</span>
+            <span class="exact"><input type="number" id="riseNum" step="0.01" min="0"><span class="val gain">%</span></span>
+          </div>
+          <input type="range" class="gain" id="rise" step="0.01">
+          <div class="ends"><span>0 %</span><span id="riseMax">–</span></div>
+        </div>
+
+        <p class="hint" id="extremeHint">Reglerenden entsprechen den stärksten Bewegungen,
+          die in den aufgezeichneten Daten tatsächlich vorkamen.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Laufzeit</legend>
+        <label for="dur">Wie lange soll überwacht werden?</label>
+        <select id="dur">
+          <option value="">unbegrenzt</option>
+          <option value="7">noch 1 Woche</option>
+          <option value="30">noch 1 Monat</option>
+          <option value="90">noch 3 Monate</option>
+          <option value="365">noch 1 Jahr</option>
+          <option value="custom">bis zu einem Datum …</option>
+        </select>
+        <div id="dateWrap" hidden>
+          <label for="until">Enddatum</label>
+          <input id="until" type="date">
+        </div>
+        <div class="row2">
+          <div>
+            <label for="interval">Intervall (Min.)</label>
+            <input id="interval" type="number" min="1" value="10">
+          </div>
+          <div>
+            <label for="cooldown">Ruhe nach Alarm (Std.)</label>
+            <input id="cooldown" type="number" min="0" step="0.5" value="12">
+          </div>
+        </div>
+        <p class="hint">Der Cron-Takt steht in <code>watcher.yml</code>; das Intervall hier gilt für den lokalen Dauerlauf.</p>
+      </fieldset>
+
+      <pre id="json">…</pre>
+      <p id="err" class="err"></p>
+      <div class="actions">
+        <button type="button" class="primary" id="copy">config.json kopieren</button>
+        <a href="https://github.com/Suess3/stock-watch/edit/main/config.json" target="_blank" rel="noopener"><button type="button">GitHub-Editor</button></a>
+        <button type="button" id="reset">zurücksetzen</button>
+        <span class="ok" id="ok">kopiert</span>
+      </div>
+    </form>
+  </div>
+</main>
+
 <script>
-const $=id=>document.getElementById(id), num=(n,d=2)=>Number(n).toLocaleString("de-DE",{minimumFractionDigits:d,maximumFractionDigits:d}), pct=n=>`${Number(n)>=0?"+":""}${num(n)} %`;
-function chart(pred, real) { if(!pred?.length)return ""; const values=[...pred.flatMap(p=>[p.lower_pct,p.upper_pct,p.return_pct]),...(real||[]).map(p=>p.return_pct).filter(Number.isFinite)], max=Math.max(1,...values.map(Math.abs))*1.15, W=700,H=260,L=46,R=16,T=18,B=28,iw=W-L-R,ih=H-T-B,x=i=>L+(pred.length<2?iw/2:i/(pred.length-1)*iw),y=v=>T+ih-(v+max)/(2*max)*ih,path=(a,k)=>a.map((p,i)=>`${i?"L":"M"}${x(i)},${y(p[k])}`).join(" "); const top=path(pred,"upper_pct"), bottom=pred.slice().reverse().map((p,j)=>`L${x(pred.length-1-j)},${y(p.lower_pct)}`).join(" "), actual=(real||[]).filter(p=>p.return_pct!=null).map((p,i)=>`${i?"L":"M"}${x(i)},${y(p.return_pct)}`).join(" "); return `<svg viewBox="0 0 ${W} ${H}"><line x1="${L}" x2="${W-R}" y1="${y(0)}" y2="${y(0)}" stroke="var(--axis)"/><path d="${top}${bottom}Z" fill="var(--blue)" opacity=".16"/><path d="${path(pred,"return_pct")}" fill="none" stroke="var(--blue)" stroke-width="2.4"/><path d="${actual}" fill="none" stroke="var(--ink)" stroke-width="2.2"/>${pred.map((p,i)=>`<text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--muted)">${p.time}</text>`).join("")}</svg>`; }
-function render(data) { const p=data.prediction,e=data.latest_evaluation,m=data.metrics; $("stamp").textContent=data.updated_at?`Aktualisiert ${new Date(data.updated_at).toLocaleString("de-DE")}`:"Noch keine veröffentlichte Tagesprognose."; if(!p){$("content").innerHTML=`<section class="card wide empty">${data.note||"Noch keine Daten."}</section>`;return;} const r=p.close_return_pct, cls=r>=0?"gain":"loss"; $("content").innerHTML=`<section class="card"><div class="head"><div><h3>Aktuelle Prognose</h3><div class="sub" style="text-align:left">${p.session||"–"} · S&P 500</div></div><div><div class="figure ${cls}">${pct(r)}</div><div class="sub">erwartete Tagesrendite</div></div></div><div class="metrics"><div class="metric"><b>${num(p.expected_close)} USD</b><span>erwarteter Schluss</span></div><div class="metric"><b>± ${num(p.uncertainty_pct)} %</b><span>historischer Fehlerkorridor</span></div></div></section><section class="card"><h3>Öffentliche Tagesnotiz</h3><p>${data.note||"–"}</p><div class="metrics"><div class="metric"><b>${m?.days??0}</b><span>bewertete Tage</span></div><div class="metric"><b>${m?.model_mae_pct!=null?num(m.model_mae_pct,3)+" %":"–"}</b><span>Modellfehler</span></div><div class="metric"><b>${m?.zero_baseline_mae_pct!=null?num(m.zero_baseline_mae_pct,3)+" %":"–"}</b><span>Nullprognose</span></div><div class="metric"><b>${m?.direction_accuracy_pct!=null?num(m.direction_accuracy_pct,1)+" %":"–"}</b><span>Richtung richtig</span></div></div></section><section class="card wide"><h3>Letzter Tagesverlauf</h3><div class="legend"><span><i class="key"></i>Prognose</span><span><i class="key band"></i>Fehlerkorridor</span>${e?'<span><i class="key real"></i>tatsächlich</span>':""}</div>${chart((e||p).path,e?.actual_path)}</section>`; }
-(async()=>{try{const r=await fetch("data/predict-public.json?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw Error();render(await r.json());}catch{$("stamp").textContent="Die Ergebnisdaten sind momentan nicht verfügbar.";}})();
+const REPO = "Suess3/stock-watch";
+const RAW  = `https://raw.githubusercontent.com/${REPO}/main`;
+// Verschickt wird immer ueber das Bot-Konto - nur zu diesem gehoert das
+// App-Passwort im Secret SMTP_PASS. Deshalb kein Eingabefeld.
+const SENDER = "johannes.autobot@gmail.com";
+
+const FALLBACK = {
+  smtp: { host: "smtp.gmail.com", port: 465, user: "", password: "", from: "", to: "" },
+  interval_minutes: 10, cooldown_hours: 12, run_until: "", history_minutes: 30,
+  change_alert: { enabled: true, window_days: 1, drop_percent: 1, rise_percent: 1 },
+  watchlist: [
+    { name: "S&P 500", symbol: "^GSPC", threshold: 5000, currency: "USD" },
+    { name: "Vanguard FTSE All-World (VWCE)", symbol: "VWCE.DE", threshold: 100, currency: "EUR" }
+  ]
+};
+
+let cfg = null, history = {}, longTerm = {};
+
+const $ = id => document.getElementById(id);
+const fmt = (n, d = 2) => n.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+async function grab(path, fallback) {
+  try {
+    const r = await fetch(`${RAW}/${path}?t=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch { return fallback; }
+}
+
+/* ---------------- Diagramm ----------------
+   Zwei getrennte Charts statt einer Grafik mit zwei Achsen: die Werte liegen
+   in verschiedenen Waehrungen und Groessenordnungen, eine gemeinsame Achse
+   waere irrefuehrend.                                                        */
+/* Wertebereich der y-Achse. Die Schwelle zaehlt mit, damit ihre Linie immer
+   im Bild ist. Liegt sie weit vom Kurs entfernt, wird die Kurve dadurch
+   flach - so gewuenscht. */
+function domain(ys, limit) {
+  const vals = Number.isFinite(limit) ? [...ys, limit] : ys;
+  const lo0 = Math.min(...vals), hi0 = Math.max(...vals);
+  const pad = (hi0 - lo0) * 0.08 || Math.abs(hi0 * 0.02) || 1;
+  return [lo0 - pad, hi0 + pad];
+}
+
+/* ---------------- Prozentuale Veraenderung ----------------
+   Fuer jeden Messpunkt: Wie viel Prozent liegt er ueber oder unter dem
+   letzten Kurs, der mindestens 'tage' zurueckliegt? Daraus ergeben sich
+   die staerksten je beobachteten Bewegungen - und damit die Reglerenden. */
+function changeSeries(series, tage) {
+  const fenster = tage * 864e5;
+  const ts = series.map(p => new Date(p[0]).getTime());
+  const out = [];
+  let j = 0;
+  for (let i = 0; i < series.length; i++) {
+    const grenze = ts[i] - fenster;
+    while (j + 1 < i && ts[j + 1] <= grenze) j++;
+    if (j < i && ts[j] <= grenze && series[j][1]) {
+      out.push({ t: ts[i], pct: (series[i][1] - series[j][1]) / series[j][1] * 100 });
+    }
+  }
+  return out;
+}
+
+/* Aktuelle Veraenderung: letzter Punkt gegen den Vergleichskurs. */
+function currentChange(series, tage) {
+  const alle = changeSeries(series, tage);
+  return alle.length ? alle[alle.length - 1].pct : null;
+}
+
+/* Reglergrenzen. Bevorzugt aus den langfristigen Extremwerten, die das
+   Skript aus mehreren Jahren Tagesdaten berechnet hat. Die eigene
+   Aufzeichnung umfasst nur Tage bis Wochen und wuerde die Regler viel zu
+   eng begrenzen - man koennte dann keinen Alarm bei -5 % einstellen. */
+function extremes(tage) {
+  const store = longTerm.symbols || {};
+  let min = 0, max = 0, quelle = null;
+
+  Object.values(store).forEach(werte => {
+    const paar = werte[String(tage)];
+    if (paar) { min = Math.min(min, paar[0]); max = Math.max(max, paar[1]); quelle = "lang"; }
+  });
+
+  if (!quelle) {   // Rueckfall, solange das Skript sie noch nicht geliefert hat
+    Object.values(history).forEach(series => {
+      changeSeries(series.slice().sort((a, b) => new Date(a[0]) - new Date(b[0])), tage)
+        .forEach(({ pct }) => { min = Math.min(min, pct); max = Math.max(max, pct); });
+    });
+    quelle = "kurz";
+  }
+
+  return { min: Math.min(min, -1), max: Math.max(max, 1), quelle };
+}
+
+/* x-Position eines Messpunkts: gleicher Abstand je Punkt, unabhaengig davon,
+   wie viel echte Zeit dazwischen liegt. */
+function xPos(count, left, width) {
+  return i => left + (count <= 1 ? width / 2 : i / (count - 1) * width);
+}
+
+function chart(series, limit, currency) {
+  const W = 640, H = 240, ML = 58, MR = 16, MT = 12, MB = 26;
+  const iw = W - ML - MR, ih = H - MT - MB;
+
+  const xs = series.map(p => new Date(p[0]).getTime());
+  const ys = series.map(p => p[1]);
+  const [lo, hi] = domain(ys, limit);
+  const t0 = Math.min(...xs), t1 = Math.max(...xs);
+
+  // Gleicher Abstand je Messpunkt statt echter Zeitachse. Sonst reissen
+  // Nacht und Wochenende breite Luecken auf, in denen die Boerse zu ist.
+  const X = xPos(series.length, ML, iw);
+  const Y = v => MT + ih - (v - lo) / (hi - lo) * ih;
+
+  const ticks = 4;
+  let grid = "", labels = "";
+  for (let i = 0; i <= ticks; i++) {
+    const v = lo + (hi - lo) * i / ticks, y = Y(v);
+    grid += `<line x1="${ML}" y1="${y.toFixed(1)}" x2="${W - MR}" y2="${y.toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`;
+    labels += `<text x="${ML - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--muted)" style="font-variant-numeric:tabular-nums">${fmt(v, 0)}</text>`;
+  }
+
+  const dLine = series.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+  const ly = Y(limit);
+  const dots = series.length <= 40
+    ? series.map((p, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="4" fill="var(--series)" stroke="var(--surface)" stroke-width="2"/>`).join("")
+    : "";
+
+  const dtf = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const xFirst = dtf.format(new Date(t0)), xLast = dtf.format(new Date(t1));
+
+  // Beschriftung nach innen klappen, wenn die Linie am oberen Rand klebt
+  const labelY = ly < MT + 16 ? ly + 14 : ly - 6;
+  const limitMark = `
+    <line x1="${ML}" y1="${ly.toFixed(1)}" x2="${W - MR}" y2="${ly.toFixed(1)}"
+          stroke="var(--limit)" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="${W - MR}" y="${labelY.toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--limit)"
+          style="font-variant-numeric:tabular-nums">Schwelle ${fmt(limit, 0)} ${currency}</text>`;
+
+  return `
+  <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" preserveAspectRatio="xMidYMid meet">
+    ${grid}${labels}
+    <line x1="${ML}" y1="${MT + ih}" x2="${W - MR}" y2="${MT + ih}" stroke="var(--axis)" stroke-width="1"/>
+    ${limitMark}
+    <path d="${dLine}" fill="none" stroke="var(--series)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}
+    <line class="cross" x1="0" y1="${MT}" x2="0" y2="${MT + ih}" stroke="var(--axis)" stroke-width="1" opacity="0"/>
+    <circle class="cdot" r="5" fill="var(--series)" stroke="var(--surface)" stroke-width="2" opacity="0"/>
+    <text x="${ML}" y="${H - 8}" font-size="10.5" fill="var(--muted)">${xFirst}</text>
+    <text x="${W - MR}" y="${H - 8}" text-anchor="end" font-size="10.5" fill="var(--muted)">${xLast}</text>
+    <rect class="hit" x="${ML}" y="${MT}" width="${iw}" height="${ih}" fill="transparent"/>
+  </svg>`;
+}
+
+function wireHover(wrap, series, currency, limit) {
+  const svg = wrap.querySelector("svg");
+  if (!svg) return;
+  const hit = svg.querySelector(".hit"), cross = svg.querySelector(".cross"), dot = svg.querySelector(".cdot");
+  const tip = document.createElement("div");
+  tip.className = "tip";
+  wrap.appendChild(tip);
+
+  const dtf = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  function move(ev) {
+    const box = svg.getBoundingClientRect();
+    const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    const vx = (cx - box.left) / box.width * 640;
+    // Punkte stehen in gleichen Abstaenden, also ueber den Index suchen
+    const ML = 58, iw = 640 - 58 - 16, n = series.length;
+    const X = xPos(n, ML, iw);
+    const raw = n <= 1 ? 0 : Math.round((vx - ML) / iw * (n - 1));
+    const bi = Math.max(0, Math.min(n - 1, raw));
+
+    const px = X(bi);
+    const xs = series.map(p => new Date(p[0]).getTime());
+    const [lo, hi] = domain(series.map(p => p[1]), limit);
+    const py = 12 + (240 - 12 - 26) - (series[bi][1] - lo) / (hi - lo) * (240 - 12 - 26);
+
+    cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("opacity", ".6");
+    dot.setAttribute("cx", px); dot.setAttribute("cy", py); dot.setAttribute("opacity", "1");
+    tip.style.left = (px / 640 * box.width) + "px";
+    tip.style.top  = (py / 240 * box.height) + "px";
+    tip.textContent = `${dtf.format(new Date(xs[bi]))} · ${fmt(series[bi][1])} ${currency}`;
+    tip.style.opacity = "1";
+  }
+  function leave() { cross.setAttribute("opacity", "0"); dot.setAttribute("opacity", "0"); tip.style.opacity = "0"; }
+
+  hit.addEventListener("mousemove", move);
+  hit.addEventListener("touchmove", move, { passive: true });
+  hit.addEventListener("mouseleave", leave);
+  hit.addEventListener("touchend", leave);
+}
+
+function renderCharts() {
+  const host = $("charts");
+  host.innerHTML = "";
+  cfg.watchlist.forEach(item => {
+    const series = (history[item.symbol] || []).slice().sort((a, b) => new Date(a[0]) - new Date(b[0]));
+    const last = series.length ? series[series.length - 1][1] : null;
+    const diff = last !== null ? (last - item.threshold) / item.threshold * 100 : null;
+
+    const card = document.createElement("section");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-head">
+        <div>
+          <h3>${escape_(item.name)}</h3>
+          <div class="sym">${escape_(item.symbol)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="figure">${last !== null ? fmt(last) : "–"}<span class="unit">${escape_(item.currency || "")}</span></div>
+          <div class="sub">${diff !== null ? `${diff >= 0 ? "+" : ""}${fmt(diff, 2)} % zur Schwelle` : "noch kein Kurs"}</div>
+          <div style="margin-top:.35rem">${changeBadge(series)}</div>
+        </div>
+      </div>`;
+
+    const wrap = document.createElement("div");
+    wrap.className = "chart-wrap";
+    if (series.length >= 2) {
+      wrap.innerHTML = chart(series, item.threshold, item.currency || "");
+    } else {
+      wrap.innerHTML = `<p class="empty">Noch zu wenig Messpunkte für eine Kurve
+        (${series.length}). Der Workflow ergänzt alle ${cfg.history_minutes || 30} Minuten einen Punkt.</p>`;
+    }
+    card.appendChild(wrap);
+
+    if (series.length) {
+      const det = document.createElement("details");
+      det.className = "table";
+      det.innerHTML = `<summary>Werte als Tabelle (${series.length})</summary>
+        <div class="tscroll"><table><thead><tr><th>Zeitpunkt (UTC)</th><th>Kurs</th></tr></thead><tbody>
+        ${series.slice().reverse().map(p => `<tr><td>${escape_(p[0].replace("T", " ").replace("+00:00", ""))}</td><td>${fmt(p[1])}</td></tr>`).join("")}
+        </tbody></table></div>`;
+      card.appendChild(det);
+    }
+
+    host.appendChild(card);
+    if (series.length >= 2) wireHover(wrap, series, item.currency || "", item.threshold);
+  });
+}
+
+/* Veraenderung im gewaehlten Zeitraum. Pfeil und Text tragen die Aussage,
+   die Farbe verstaerkt sie nur - sonst waere sie fuer Rot-Gruen-Schwaeche
+   und im Ausdruck verloren. */
+function changeBadge(series) {
+  const tage = parseFloat($("chgWin").value || "1");
+  const label = { 1: "24 Std.", 3: "3 Tage", 7: "Woche" }[tage] || `${tage} Tage`;
+  const pct = series.length ? currentChange(series, tage) : null;
+  if (pct === null) {
+    return `<span class="badge flat">– über ${label}</span>`;
+  }
+  const art = pct <= -0.005 ? "loss" : pct >= 0.005 ? "gain" : "flat";
+  const pfeil = art === "loss" ? "▼" : art === "gain" ? "▲" : "■";
+  const vz = pct > 0 ? "+" : "";
+  return `<span class="badge ${art}">${pfeil} ${vz}${fmt(pct, 2)} % über ${label}</span>`;
+}
+
+function escape_(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ---------------- Formular ---------------- */
+function renderLimits() {
+  const host = $("limits");
+  host.innerHTML = "";
+  cfg.watchlist.forEach((item, i) => {
+    const d = document.createElement("div");
+    d.innerHTML = `<label for="lim${i}">${escape_(item.name)} <span style="color:var(--muted)">(${escape_(item.currency || "")})</span></label>
+                   <input id="lim${i}" type="number" step="any" value="${item.threshold}">`;
+    host.appendChild(d);
+    d.querySelector("input").addEventListener("input", build);
+  });
+}
+
+/* Reglerenden aus den Extremwerten setzen. Die gewaehlten Werte bleiben
+   dabei erhalten, soweit sie in den neuen Bereich passen. */
+function syncSliders() {
+  const tage = parseFloat($("chgWin").value);
+  const { min, max, quelle } = extremes(tage);
+
+  const drop = $("drop"), rise = $("rise");
+  const altDrop = drop.value === "" ? -1 : parseFloat(drop.value);
+  const altRise = rise.value === "" ? 1 : parseFloat(rise.value);
+
+  drop.min = min.toFixed(2); drop.max = "0";
+  rise.min = "0"; rise.max = max.toFixed(2);
+  drop.value = Math.max(min, Math.min(0, altDrop));
+  rise.value = Math.min(max, Math.max(0, altRise));
+  $("dropNum").min = drop.min;
+  $("riseNum").max = rise.max;
+
+  $("dropMin").textContent = `${fmt(min, 2)} %`;
+  $("riseMax").textContent = `+${fmt(max, 2)} %`;
+
+  const spanne = { 1: "an einem Tag", 3: "in drei Tagen", 7: "in einer Woche" }[tage] || `in ${tage} Tagen`;
+  $("extremeHint").textContent = quelle === "lang"
+    ? `Die Enden sind die stärksten Bewegungen ${spanne} aus ${longTerm.period || "5y"}`
+      + ` Tagesdaten (berechnet ${(longTerm.computed || "").slice(0, 10)}). Schritt 0,01 %.`
+    : `Noch keine Langzeitwerte vom Watcher — die Enden stammen vorläufig aus der`
+      + ` kurzen eigenen Aufzeichnung und sind daher zu eng.`;
+  showSliderValues();
+}
+
+/* Regler und Zahlenfeld zeigen denselben Wert; beide duerfen fuehren. */
+function showSliderValues(von) {
+  if (von !== "num") {
+    $("dropNum").value = parseFloat($("drop").value).toFixed(2);
+    $("riseNum").value = parseFloat($("rise").value).toFixed(2);
+  }
+  if (von !== "range") {
+    const d = parseFloat($("dropNum").value), r = parseFloat($("riseNum").value);
+    if (Number.isFinite(d)) $("drop").value = Math.min(0, Math.max(parseFloat($("drop").min), d));
+    if (Number.isFinite(r)) $("rise").value = Math.max(0, Math.min(parseFloat($("rise").max), r));
+  }
+}
+
+function runUntil() {
+  const v = $("dur").value;
+  if (!v) return "";
+  if (v === "custom") return $("until").value || "";
+  const d = new Date();
+  d.setDate(d.getDate() + parseInt(v, 10));
+  return d.toISOString().slice(0, 10);
+}
+
+function build() {
+  const mail = $("mail").value.trim();
+  const list = cfg.watchlist.map((item, i) => ({
+    name: item.name, symbol: item.symbol,
+    threshold: parseFloat($(`lim${i}`).value),
+    currency: item.currency
+  }));
+
+  const problems = [];
+  if (!mail) problems.push("Empfängeradresse fehlt.");
+  list.forEach((it, i) => {
+    if (!Number.isFinite(it.threshold)) problems.push(`${it.name}: Schwelle ist keine Zahl.`);
+  });
+
+  const out = {
+    smtp: {
+      host: cfg.smtp?.host || "smtp.gmail.com",
+      port: parseInt(cfg.smtp?.port, 10) || 465,
+      user: SENDER, password: "", from: SENDER, to: mail
+    },
+    interval_minutes: parseInt($("interval").value, 10) || 10,
+    cooldown_hours: parseFloat($("cooldown").value) || 0,
+    run_until: runUntil(),
+    history_minutes: cfg.history_minutes ?? 30,
+    change_alert: {
+      enabled: $("chgOn").checked,
+      window_days: parseFloat($("chgWin").value),
+      // Beide Werte sind Betraege; das Vorzeichen steckt in der Bedeutung
+      drop_percent: Math.abs(parseFloat($("drop").value)) || 0,
+      rise_percent: Math.abs(parseFloat($("rise").value)) || 0
+    },
+    watchlist: list.map(it => ({
+      name: it.name, symbol: it.symbol,
+      threshold: Number.isFinite(it.threshold) ? it.threshold : 0,
+      currency: it.currency
+    }))
+  };
+
+  $("json").textContent = JSON.stringify(out, null, 2);
+  $("err").textContent = problems.join(" ");
+  $("copy").disabled = problems.length > 0;
+  saveForm();
+
+  // Schwellenlinie in den Charts mitziehen
+  const changed = list.some((it, i) => it.threshold !== cfg.watchlist[i].threshold);
+  if (changed && list.every(it => Number.isFinite(it.threshold))) {
+    cfg.watchlist = cfg.watchlist.map((it, i) => ({ ...it, threshold: list[i].threshold }));
+    renderCharts();
+  }
+}
+
+$("dur").addEventListener("change", () => {
+  $("dateWrap").hidden = $("dur").value !== "custom";
+  build();
+});
+["mail", "interval", "cooldown", "until"].forEach(id => $(id).addEventListener("input", build));
+
+$("chgWin").addEventListener("change", () => { syncSliders(); renderCharts(); build(); });
+["drop", "rise"].forEach(id =>
+  $(id).addEventListener("input", () => { showSliderValues("range"); build(); }));
+["dropNum", "riseNum"].forEach(id =>
+  $(id).addEventListener("input", () => { showSliderValues("num"); build(); }));
+$("chgOn").addEventListener("change", build);
+
+$("copy").addEventListener("click", async () => {
+  const text = $("json").textContent;
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove();
+  }
+  $("ok").classList.add("show");
+  setTimeout(() => $("ok").classList.remove("show"), 1400);
+});
+
+/* ---------------- Eingaben ueber das Neuladen retten ----------------
+   Die Werte stehen sonst nur in der noch nicht committeten config.json und
+   waeren beim Neuladen weg. Nur dieser Browser, nichts verlaesst das Geraet. */
+const STORE = "stock-watch:form";
+
+function saveForm() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify({
+      mail: $("mail").value,
+      dur: $("dur").value,
+      until: $("until").value,
+      interval: $("interval").value,
+      cooldown: $("cooldown").value,
+      chgOn: $("chgOn").checked,
+      chgWin: $("chgWin").value,
+      drop: $("drop").value,
+      rise: $("rise").value,
+      limits: cfg.watchlist.map((it, i) => [it.symbol, $(`lim${i}`)?.value])
+    }));
+  } catch { /* privater Modus o.ae. - dann eben ohne */ }
+}
+
+function restoreForm() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(STORE) || "null"); } catch { return false; }
+  if (!saved) return false;
+
+  if (saved.mail) $("mail").value = saved.mail;
+  if (saved.interval) $("interval").value = saved.interval;
+  if (saved.cooldown) $("cooldown").value = saved.cooldown;
+  if (saved.dur !== undefined) {
+    $("dur").value = saved.dur;
+    $("dateWrap").hidden = saved.dur !== "custom";
+    if (saved.until) $("until").value = saved.until;
+  }
+  if (saved.chgOn !== undefined) $("chgOn").checked = saved.chgOn;
+  if (saved.chgWin) $("chgWin").value = saved.chgWin;
+  syncSliders();   // Reglerenden zum gespeicherten Zeitraum passend setzen
+  if (saved.drop) $("drop").value = saved.drop;
+  if (saved.rise) $("rise").value = saved.rise;
+  showSliderValues();
+
+  // Schwellen ueber das Symbol zuordnen, nicht ueber die Position
+  (saved.limits || []).forEach(([symbol, value]) => {
+    const i = cfg.watchlist.findIndex(it => it.symbol === symbol);
+    if (i >= 0 && value !== undefined && value !== null && $(`lim${i}`)) $(`lim${i}`).value = value;
+  });
+  return true;
+}
+
+$("reset").addEventListener("click", () => {
+  try { localStorage.removeItem(STORE); } catch {}
+  location.reload();
+});
+
+function showStamp(restored) {
+  const points = Object.values(history).reduce((n, a) => n + a.length, 0);
+  const newest = Object.values(history).flat().map(p => p[0]).sort().pop();
+  const geladen = new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  $("stamp").textContent = points
+    ? `${points} Messpunkte, zuletzt ${newest.replace("T", " ").replace("+00:00", "")} UTC`
+      + ` · abgerufen ${geladen}`
+      + (restored ? " · Eingaben aus diesem Browser wiederhergestellt" : "")
+    : "Noch keine Kursdaten — der Workflow sammelt sie ab dem nächsten Lauf.";
+}
+
+async function refresh() {
+  const s = await grab("state.json", null);
+  if (!s) return;
+  history = s.__history || {};
+  longTerm = s.__extremes || longTerm;
+  showStamp(false);
+  renderCharts();
+}
+
+(async function init() {
+  const [c, s] = await Promise.all([
+    grab("config.json", FALLBACK),
+    grab("state.json", {})
+  ]);
+  cfg = { ...FALLBACK, ...c, smtp: { ...FALLBACK.smtp, ...(c.smtp || {}) } };
+  history = s.__history || {};
+  longTerm = s.__extremes || {};
+
+  $("mail").value = cfg.smtp.to || "";
+  $("interval").value = cfg.interval_minutes ?? 10;
+  $("cooldown").value = cfg.cooldown_hours ?? 12;
+  if (cfg.run_until) {
+    $("dur").value = "custom";
+    $("dateWrap").hidden = false;
+    $("until").value = String(cfg.run_until).slice(0, 10);
+  }
+
+  const chg = cfg.change_alert || {};
+  $("chgOn").checked = chg.enabled !== false;
+  $("chgWin").value = String(chg.window_days ?? 1);
+  syncSliders();
+  if (chg.drop_percent != null) $("drop").value = -Math.abs(chg.drop_percent);
+  if (chg.rise_percent != null) $("rise").value = Math.abs(chg.rise_percent);
+  showSliderValues();
+
+  renderLimits();
+  const restored = restoreForm();
+  showStamp(restored);
+  renderCharts();
+  build();
+
+  // Neue Messpunkte nachladen, ohne dass man die Seite neu laden muss
+  setInterval(refresh, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refresh();
+  });
+})();
 </script>
-</body></html>
+</body>
+</html>
