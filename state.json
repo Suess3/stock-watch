@@ -6,7 +6,7 @@
   },
   "^GSPC": {
     "below": false,
-    "change_dir": "down",
+    "change_dir": null,
     "last_alert": "2026-09-17T08:56:17.565743+00:00"
   },
   "__backfill_tries": {},
@@ -2331,5 +2331,5 @@
       ]
     ]
   },
-  "__last_check": "2026-10-17T12:43:47+00:00"
+  "__last_check": "2026-10-17T15:59:01+00:00"
 }
