@@ -1,12 +1,12 @@
 {
   "VWCE.DE": {
     "below": true,
-    "change_dir": "down",
+    "change_dir": null,
     "last_alert": "2026-11-19T16:51:41.508607+00:00"
   },
   "^GSPC": {
     "below": true,
-    "change_dir": null,
+    "change_dir": "down",
     "last_alert": "2026-11-19T16:51:41.508607+00:00"
   },
   "__backfill_tries": {},
@@ -2736,8 +2736,12 @@
       [
         "2026-11-19T16:51+00:00",
         7288.7798
+      ],
+      [
+        "2026-11-19T23:24+00:00",
+        7175.8301
       ]
     ]
   },
-  "__last_check": "2026-11-19T16:51:41+00:00"
+  "__last_check": "2026-11-19T23:24:58+00:00"
 }
