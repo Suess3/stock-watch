@@ -2,12 +2,12 @@
   "VWCE.DE": {
     "below": true,
     "change_dir": null,
-    "last_alert": "2026-11-21T16:59:04.332889+00:00"
+    "last_alert": "2026-11-22T09:54:09.646682+00:00"
   },
   "^GSPC": {
     "below": true,
     "change_dir": null,
-    "last_alert": "2026-11-21T16:59:04.332889+00:00"
+    "last_alert": "2026-11-22T09:54:09.646682+00:00"
   },
   "__backfill_tries": {},
   "__change_last_mail": "2026-11-20T20:56:34+00:00",
@@ -2759,5 +2759,5 @@
       ]
     ]
   },
-  "__last_check": "2026-11-22T02:11:45+00:00"
+  "__last_check": "2026-11-22T09:54:09+00:00"
 }
