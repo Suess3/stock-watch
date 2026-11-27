@@ -2,15 +2,15 @@
   "VWCE.DE": {
     "below": true,
     "change_dir": "up",
-    "last_alert": "2026-11-26T14:56:36.630081+00:00"
+    "last_alert": "2026-11-27T05:19:44.867646+00:00"
   },
   "^GSPC": {
     "below": true,
     "change_dir": null,
-    "last_alert": "2026-11-26T14:56:36.630081+00:00"
+    "last_alert": "2026-11-27T05:19:44.867646+00:00"
   },
   "__backfill_tries": {},
-  "__change_last_mail": "2026-11-26T04:58:13+00:00",
+  "__change_last_mail": "2026-11-27T05:19:44+00:00",
   "__extremes": {
     "computed": "2026-11-03T01:19:08+00:00",
     "period": "5y",
@@ -2807,5 +2807,5 @@
       ]
     ]
   },
-  "__last_check": "2026-11-26T23:33:37+00:00"
+  "__last_check": "2026-11-27T05:19:44+00:00"
 }
